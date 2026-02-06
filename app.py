@@ -11,12 +11,23 @@ STATIONS_CONFIG = {
     'bak': {'label': 'แม่น้ำน้อย (บางจัก)', 'bank': 5.00, 'max': 6.5, 'color': '#e67e22'}
 }
 
+def get_thai_date():
+    """ฟังก์ชันสำหรับดึงวันที่ปัจจุบันในรูปแบบภาษาไทย"""
+    months = [
+        "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+        "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+    ]
+    now = datetime.now()
+    day = now.day
+    month = months[now.month - 1]
+    year = now.year + 543
+    return f"{day} {month} {year}"
+
 def parse_text(text):
     data = {}
     
-    # ดึงวันที่รายงาน
-    date_match = re.search(r"ประจำวันที่\s*(.*)", text)
-    data['date'] = date_match.group(1).strip() if date_match else datetime.now().strftime("%d %B %Y")
+    # ใช้ค่าวันที่ปัจจุบันเป็นหลักตามที่พี่โบ้สั่ง
+    data['date'] = get_thai_date()
     
     # ข้อ 1: ปริมาณฝน
     if "ไม่มีฝน" in text:
@@ -56,16 +67,21 @@ def parse_text(text):
 
     # ข้อ 3 & 4: สถานการณ์อ่างเก็บน้ำและอุทกภัย
     res_match = re.search(r"3\..*?\n(.*?)\n", text, re.S)
-    data['reservoir_status'] = res_match.group(1).strip() if res_match else "ไม่มีอ่างเก็บน้ำในพื้นที่"
+    res_status = res_match.group(1).strip() if res_match else "ไม่มีอ่างเก็บน้ำในพื้นที่"
+    # ตัดคำว่า "ดังนี้" ออกจากข้อความถ้ามีหลุดมา
+    data['reservoir_status'] = res_status.replace("ดังนี้", "").strip()
     
     flood_match = re.search(r"4\..*?\n(.*?)\n", text, re.S)
-    data['flood_status'] = flood_match.group(1).strip() if flood_match else "-"
-    if data['flood_status'] in ["-", ""]: data['flood_status'] = "ปกติ (ไม่มีรายงานอุทกภัย)"
+    flood_status = flood_match.group(1).strip() if flood_match else "-"
+    if flood_status in ["-", "", "ดังนี้"]: 
+        data['flood_status'] = "ปกติ (ไม่มีรายงานอุทกภัย)"
+    else:
+        data['flood_status'] = flood_status.replace("ดังนี้", "").strip()
 
     return data
 
 def draw_dashboard(data, font_path="THSarabunNew.ttf"):
-    w, h = 1200, 1500 # ปรับความสูงลงเล็กน้อยเพราะตัดยางมณีออก
+    w, h = 1200, 1500
     img = Image.new('RGB', (w, h), color='#1e1e2e')
     draw = ImageDraw.Draw(img)
 
@@ -85,7 +101,8 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     # --- Header ---
     draw.rectangle([0, 0, w, 320], fill="#11111b")
     draw.text((w/2, 60), "รายงานสถานการณ์น้ำรายวัน จังหวัดอ่างทอง", fill="#89b4fa", font=f_title, anchor="mm")
-    draw.text((w/2, 120), f"ข้อมูล {data['date']}", fill="#f9e2af", font=f_sub, anchor="mm")
+    # เปลี่ยนจาก "ข้อมูล" เป็น "ณ วันที่" ตามที่พี่โบ้สั่ง
+    draw.text((w/2, 120), f"ณ วันที่ {data['date']}", fill="#f9e2af", font=f_sub, anchor="mm")
     
     # --- ข้อ 1: ปริมาณฝน ---
     rain_box_x = w/2
