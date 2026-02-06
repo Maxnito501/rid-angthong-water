@@ -42,10 +42,12 @@ def parse_text(text):
         return 0.0, 0.0
 
     def extract_flow(key_word, text):
+        # ดึงตัวเลขปริมาณน้ำไหลผ่าน
         pattern = rf"{key_word}.*?(?:มีปริมาณน้ำไหลผ่าน|ปริมาณน้ำผ่าน|ปริมาณ)\s*([\d\.\-\s]+)\s*(?:ลบ\.ม\./วิ|ลบ\.ม\./วินาที|ลม\.ม/วินาที)"
         match = re.search(pattern, text, re.S | re.IGNORECASE)
         if match:
-            return match.group(1).strip()
+            val = match.group(1).strip()
+            return val if val != "-" else "-"
         return "-"
 
     data['c7a'] = extract_level("C7A", text)
@@ -79,7 +81,6 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         f_title = ImageFont.truetype(font_path, 60)
         f_sub = ImageFont.truetype(font_path, 40)
         f_label = ImageFont.truetype(font_path, 45)
-        # ปรับขนาดฟอนต์ระดับน้ำเหลือ 45 ให้เท่ากับชื่อสถานี
         f_val = ImageFont.truetype(font_path, 45)
         f_diff = ImageFont.truetype(font_path, 35)
         f_info = ImageFont.truetype(font_path, 38)
@@ -101,42 +102,57 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     draw.text((rain_box_x, rain_box_y + 60), data['rain_val'], fill="#ffffff", font=f_rain_val, anchor="mm")
     draw.text((rain_box_x - 120, rain_box_y + 30), "ปริมาณฝน", fill="#585b70", font=f_sub, anchor="rm")
 
-    # --- Main Gauges ---
+    # --- Main Gauges (ส่วนระดับน้ำ 3 สถานี) ---
     col_w = w // 3
     for i, key in enumerate(['c7a', 'wat', 'bak']):
         st_info = STATIONS_CONFIG[key]
         st_val, st_diff = data[key]
         curr_x = (i * col_w) + (col_w / 2)
         
-        draw.rounded_rectangle([i*col_w+30, 350, (i+1)*col_w-30, 1050], radius=30, fill="#181825")
+        # วาดการ์ดสถานี
+        draw.rounded_rectangle([i*col_w+30, 350, (i+1)*col_w-30, 1080], radius=30, fill="#181825")
         draw.text((curr_x, 410), st_info['label'], fill="#cdd6f4", font=f_label, anchor="mm")
 
+        # วาดถังเกจ (Tank)
         t_x1, t_y1, t_x2, t_y2 = curr_x-60, 500, curr_x+60, 850
         draw.rectangle([t_x1-5, t_y1-5, t_x2+5, t_y2+5], fill="#313244")
         
+        # วาดระดับน้ำสีฟ้า
         ratio = min(st_val / st_info['max'], 1.0)
         w_top = t_y2 - ((t_y2-t_y1) * ratio)
         draw.rectangle([t_x1, w_top, t_x2, t_y2], fill=st_info['color'])
 
+        # วาดเส้นตลิ่งสีแดง
         b_ratio = st_info['bank'] / st_info['max']
         b_y = t_y2 - ((t_y2-t_y1) * b_ratio)
         draw.line([t_x1-30, b_y, t_x2+30, b_y], fill="#f38ba8", width=6)
         draw.text((t_x2+40, b_y), f"ตลิ่ง {st_info['bank']:.2f}", fill="#f38ba8", font=f_diff, anchor="lm")
 
-        # แสดงระดับน้ำด้วยขนาดที่เล็กลงเท่าชื่อสถานี
+        # บรรทัดที่ 1: ระดับน้ำปัจจุบัน
         draw.text((curr_x, 920), f"+{st_val:.2f} ม.รทก.", fill="#cdd6f4", font=f_val, anchor="mm")
+        
+        # บรรทัดที่ 2: ผลต่างเมื่อเทียบเมื่อวาน
         diff_color = "#f38ba8" if st_diff > 0 else ("#89b4fa" if st_diff < 0 else "#bac2de")
-        draw.text((curr_x, 980), f"({st_diff:+.2f} ม.)", fill=diff_color, font=f_diff, anchor="mm")
+        draw.text((curr_x, 975), f"({st_diff:+.2f} ม.)", fill=diff_color, font=f_diff, anchor="mm")
+        
+        # บรรทัดที่ 3: อัตราไหล (เฉพาะ C.7A วางไว้ใต้ระดับบวกลบ)
+        if key == 'c7a':
+            flow_val = data.get('c7a_q', '-')
+            # แสดงแค่ตัวเลขและหน่วย ไม่ใส่คำว่า "อัตราการไหล c7a"
+            draw.text((curr_x, 1030), f"{flow_val} ลบ.ม./วิ", fill="#a6e3a1", font=f_info, anchor="mm")
 
-    # --- ส่วนข้อมูลเพิ่มเติม ---
-    info_y = 1100
+    # --- ส่วนข้อมูลเพิ่มเติมด้านล่าง ---
+    info_y = 1150
     draw.rounded_rectangle([50, info_y, w-50, info_y + 180], radius=20, fill="#11111b", outline="#313244")
-    flow_text = f"📍 อัตราการไหล C.7A: {data['c7a_q']} ลบ.ม./วิ  |  📍 ปตร.ยางมณี: เหนือ +{data['yang_up']} / ท้าย +{data['yang_down']} (Q={data['yang_q']})"
-    draw.text((w/2, info_y + 50), flow_text, fill="#a6e3a1", font=f_info, anchor="mm")
+    
+    # ข้อมูลการระบายน้ำ ปตร.ยางมณี (ลบ C7A ออกจากตรงนี้เพราะไปรวมอยู่ในกราฟข้างบนแล้ว)
+    yang_text = f"📍 ปตร.ยางมณี: เหนือ +{data['yang_up']} / ท้าย +{data['yang_down']} | ระบายน้ำ {data['yang_q']} ลบ.ม./วิ"
+    draw.text((w/2, info_y + 50), yang_text, fill="#a6e3a1", font=f_info, anchor="mm")
     
     draw.text((100, info_y + 110), f"🏗 อ่างเก็บน้ำ: {data['reservoir_status']}", fill="#bac2de", font=f_info, anchor="lm")
     draw.text((100, info_y + 155), f"⚠️ อุทกภัย: {data['flood_status']}", fill="#f9e2af", font=f_info, anchor="lm")
 
+    # Footer
     draw.text((w/2, h-50), "โครงการชลประทานอ่างทอง สำนักงานชลประทานที่ 12", fill="#585b70", font=f_sub, anchor="mm")
 
     return img
@@ -144,8 +160,8 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
 # --- Streamlit UI ---
 st.set_page_config(page_title="RID Ang Thong Dashboard", layout="wide")
 
-st.title("🌊 RID Ang Thong Smart Dashboard v1.2")
-st.markdown("ระบบแปลงรายงานข้อความ LINE เป็น Infographic")
+st.title("🌊 RID Ang Thong Smart Dashboard v1.3")
+st.markdown("ระบบแปลงรายงานข้อความ LINE เป็น Infographic (ฉบับคู่คิดพี่โบ้)")
 
 col1, col2 = st.columns([1, 1.5])
 
