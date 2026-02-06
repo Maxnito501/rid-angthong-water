@@ -42,7 +42,6 @@ def parse_text(text):
         return 0.0, 0.0
 
     def extract_flow(key_word, text):
-        # ดึงตัวเลขปริมาณน้ำไหลผ่าน
         pattern = rf"{key_word}.*?(?:มีปริมาณน้ำไหลผ่าน|ปริมาณน้ำผ่าน|ปริมาณ)\s*([\d\.\-\s]+)\s*(?:ลบ\.ม\./วิ|ลบ\.ม\./วินาที|ลม\.ม/วินาที)"
         match = re.search(pattern, text, re.S | re.IGNORECASE)
         if match:
@@ -54,26 +53,19 @@ def parse_text(text):
     data['c7a_q'] = extract_flow("C7A", text)
     data['wat'] = extract_level("วัดตูม", text)
     data['bak'] = extract_level("บางจัก", text)
-    
-    yang_match = re.search(r"ปตร\.ยางมณี\s*\+\s*([\d\.]+).*?ท้ายปตร\.\+\s*([\d\.]+).*?ปริมาณน้ำผ่าน\s*([\d\.]+)", text, re.S)
-    if yang_match:
-        data['yang_up'] = yang_match.group(1)
-        data['yang_down'] = yang_match.group(2)
-        data['yang_q'] = yang_match.group(3)
-    else:
-        data['yang_up'] = data['yang_down'] = data['yang_q'] = "-"
 
+    # ข้อ 3 & 4: สถานการณ์อ่างเก็บน้ำและอุทกภัย
     res_match = re.search(r"3\..*?\n(.*?)\n", text, re.S)
-    data['reservoir_status'] = res_match.group(1).strip() if res_match else "ปกติ"
+    data['reservoir_status'] = res_match.group(1).strip() if res_match else "ไม่มีอ่างเก็บน้ำในพื้นที่"
     
     flood_match = re.search(r"4\..*?\n(.*?)\n", text, re.S)
     data['flood_status'] = flood_match.group(1).strip() if flood_match else "-"
-    if data['flood_status'] in ["-", ""]: data['flood_status'] = "ไม่มีรายงานอุทกภัยในพื้นที่"
+    if data['flood_status'] in ["-", ""]: data['flood_status'] = "ปกติ (ไม่มีรายงานอุทกภัย)"
 
     return data
 
 def draw_dashboard(data, font_path="THSarabunNew.ttf"):
-    w, h = 1200, 1600
+    w, h = 1200, 1500 # ปรับความสูงลงเล็กน้อยเพราะตัดยางมณีออก
     img = Image.new('RGB', (w, h), color='#1e1e2e')
     draw = ImageDraw.Draw(img)
 
@@ -86,8 +78,9 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         f_info = ImageFont.truetype(font_path, 38)
         f_rain_icon = ImageFont.truetype(font_path, 80)
         f_rain_val = ImageFont.truetype(font_path, 50)
+        f_status_icon = ImageFont.truetype(font_path, 60)
     except:
-        f_title = f_sub = f_label = f_val = f_diff = f_info = f_rain_icon = f_rain_val = None
+        f_title = f_sub = f_label = f_val = f_diff = f_info = f_rain_icon = f_rain_val = f_status_icon = None
 
     # --- Header ---
     draw.rectangle([0, 0, w, 320], fill="#11111b")
@@ -97,76 +90,70 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     # --- ข้อ 1: ปริมาณฝน ---
     rain_box_x = w/2
     rain_box_y = 220
-    icon = "🌧" if data['has_rain'] else "☁️"
-    draw.text((rain_box_x, rain_box_y), icon, fill="#89b4fa", font=f_rain_icon, anchor="mm")
+    icon_rain = "🌧" if data['has_rain'] else "☁️"
+    draw.text((rain_box_x, rain_box_y), icon_rain, fill="#89b4fa", font=f_rain_icon, anchor="mm")
     draw.text((rain_box_x, rain_box_y + 60), data['rain_val'], fill="#ffffff", font=f_rain_val, anchor="mm")
     draw.text((rain_box_x - 120, rain_box_y + 30), "ปริมาณฝน", fill="#585b70", font=f_sub, anchor="rm")
 
-    # --- Main Gauges (ส่วนระดับน้ำ 3 สถานี) ---
+    # --- Main Gauges (ระดับน้ำ 3 สถานี) ---
     col_w = w // 3
     for i, key in enumerate(['c7a', 'wat', 'bak']):
         st_info = STATIONS_CONFIG[key]
         st_val, st_diff = data[key]
         curr_x = (i * col_w) + (col_w / 2)
         
-        # วาดการ์ดสถานี
         draw.rounded_rectangle([i*col_w+30, 350, (i+1)*col_w-30, 1080], radius=30, fill="#181825")
         draw.text((curr_x, 410), st_info['label'], fill="#cdd6f4", font=f_label, anchor="mm")
 
-        # วาดถังเกจ (Tank)
         t_x1, t_y1, t_x2, t_y2 = curr_x-60, 500, curr_x+60, 850
         draw.rectangle([t_x1-5, t_y1-5, t_x2+5, t_y2+5], fill="#313244")
         
-        # วาดระดับน้ำสีฟ้า
         ratio = min(st_val / st_info['max'], 1.0)
         w_top = t_y2 - ((t_y2-t_y1) * ratio)
         draw.rectangle([t_x1, w_top, t_x2, t_y2], fill=st_info['color'])
 
-        # วาดเส้นตลิ่งสีแดง
         b_ratio = st_info['bank'] / st_info['max']
         b_y = t_y2 - ((t_y2-t_y1) * b_ratio)
         draw.line([t_x1-30, b_y, t_x2+30, b_y], fill="#f38ba8", width=6)
         draw.text((t_x2+40, b_y), f"ตลิ่ง {st_info['bank']:.2f}", fill="#f38ba8", font=f_diff, anchor="lm")
 
-        # บรรทัดที่ 1: ระดับน้ำปัจจุบัน
         draw.text((curr_x, 920), f"+{st_val:.2f} ม.รทก.", fill="#cdd6f4", font=f_val, anchor="mm")
-        
-        # บรรทัดที่ 2: ผลต่างเมื่อเทียบเมื่อวาน
         diff_color = "#f38ba8" if st_diff > 0 else ("#89b4fa" if st_diff < 0 else "#bac2de")
         draw.text((curr_x, 975), f"({st_diff:+.2f} ม.)", fill=diff_color, font=f_diff, anchor="mm")
         
-        # บรรทัดที่ 3: อัตราไหล (เฉพาะ C.7A วางไว้ใต้ระดับบวกลบ)
         if key == 'c7a':
             flow_val = data.get('c7a_q', '-')
-            # แสดงแค่ตัวเลขและหน่วย ไม่ใส่คำว่า "อัตราการไหล c7a"
             draw.text((curr_x, 1030), f"{flow_val} ลบ.ม./วิ", fill="#a6e3a1", font=f_info, anchor="mm")
 
-    # --- ส่วนข้อมูลเพิ่มเติมด้านล่าง ---
-    info_y = 1150
-    draw.rounded_rectangle([50, info_y, w-50, info_y + 180], radius=20, fill="#11111b", outline="#313244")
-    
-    # ข้อมูลการระบายน้ำ ปตร.ยางมณี (ลบ C7A ออกจากตรงนี้เพราะไปรวมอยู่ในกราฟข้างบนแล้ว)
-    yang_text = f"📍 ปตร.ยางมณี: เหนือ +{data['yang_up']} / ท้าย +{data['yang_down']} | ระบายน้ำ {data['yang_q']} ลบ.ม./วิ"
-    draw.text((w/2, info_y + 50), yang_text, fill="#a6e3a1", font=f_info, anchor="mm")
-    
-    draw.text((100, info_y + 110), f"🏗 อ่างเก็บน้ำ: {data['reservoir_status']}", fill="#bac2de", font=f_info, anchor="lm")
-    draw.text((100, info_y + 155), f"⚠️ อุทกภัย: {data['flood_status']}", fill="#f9e2af", font=f_info, anchor="lm")
+    # --- ส่วนข้อมูลสรุปด้านล่าง (Infographic Style) ---
+    info_y = 1130
+    # Card อ่างเก็บน้ำ
+    draw.rounded_rectangle([50, info_y, w/2 - 20, info_y + 220], radius=25, fill="#11111b", outline="#313244")
+    draw.text((w/4 + 15, info_y + 60), "🚫", font=f_status_icon, anchor="mm")
+    draw.text((w/4 + 15, info_y + 130), "อ่างเก็บน้ำ", fill="#89b4fa", font=f_label, anchor="mm")
+    draw.text((w/4 + 15, info_y + 185), data['reservoir_status'], fill="#bac2de", font=f_info, anchor="mm")
+
+    # Card สถานการณ์อุทกภัย
+    draw.rounded_rectangle([w/2 + 20, info_y, w - 50, info_y + 220], radius=25, fill="#11111b", outline="#313244")
+    draw.text((3*w/4 - 15, info_y + 60), "✅", font=f_status_icon, anchor="mm")
+    draw.text((3*w/4 - 15, info_y + 130), "สถานการณ์อุทกภัย", fill="#a6e3a1", font=f_label, anchor="mm")
+    draw.text((3*w/4 - 15, info_y + 185), data['flood_status'], fill="#bac2de", font=f_info, anchor="mm")
 
     # Footer
-    draw.text((w/2, h-50), "โครงการชลประทานอ่างทอง สำนักงานชลประทานที่ 12", fill="#585b70", font=f_sub, anchor="mm")
+    draw.text((w/2, h-60), "โครงการชลประทานอ่างทอง สำนักงานชลประทานที่ 12", fill="#585b70", font=f_sub, anchor="mm")
 
     return img
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="RID Ang Thong Dashboard", layout="wide")
 
-st.title("🌊 RID Ang Thong Smart Dashboard v1.3")
-st.markdown("ระบบแปลงรายงานข้อความ LINE เป็น Infographic (ฉบับคู่คิดพี่โบ้)")
+st.title("🌊 RID Ang Thong Smart Dashboard v1.4")
+st.markdown(f"ระบบรายงานน้ำประจำตำบล (คู่คิดพี่โบ้) | อัปเดตล่าสุด: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
 col1, col2 = st.columns([1, 1.5])
 
 with col1:
-    report_input = st.text_area("วางข้อความรายงานที่นี่:", height=500, placeholder="คัดลอกข้อความรายงานประจำวันมาวางที่นี่...")
+    report_input = st.text_area("วางข้อความรายงานที่นี่:", height=550, placeholder="คัดลอกข้อความรายงานประจำวันมาวางที่นี่...")
     process_btn = st.button("🚀 ประมวลผลและสร้างภาพ", use_container_width=True)
 
 with col2:
@@ -189,7 +176,7 @@ with col2:
                 use_container_width=True
             )
     else:
-        st.info("💡 วางข้อความรายงานทางซ้ายมือ แล้วกดปุ่มประมวลผล")
+        st.info("💡 พี่โบ้วางข้อความรายงานทางซ้ายมือ แล้วกดปุ่มประมวลผลได้เลยครับ")
 
 st.divider()
-st.caption("พัฒนาโดยระบบ AI เพื่อสนับสนุนงานวิศวกรรมชลประทานอ่างทอง")
+st.caption("พัฒนาโดยคู่คิด AI เพื่อสนับสนุนงานวิศวกรรมชลประทานอ่างทอง")
