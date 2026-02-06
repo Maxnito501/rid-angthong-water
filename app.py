@@ -55,17 +55,10 @@ def parse_report(manual_text, c7a_auto_data=None):
         data['c7a'] = (c7a_vals[0], c7a_vals[1])
         data['c7a_q'] = c7a_vals[2]
 
-    # 3. สถานะอื่นๆ
-    res_match = re.search(r"3\..*?\n(.*?)\n", manual_text, re.S)
-    data['reservoir_status'] = res_match.group(1).replace("ดังนี้", "").strip() if res_match else "ไม่มีอ่างเก็บน้ำในพื้นที่"
-    
-    flood_match = re.search(r"4\..*?\n(.*?)\n", manual_text, re.S)
-    data['flood_status'] = flood_match.group(1).replace("ดังนี้", "").strip() if flood_match else "ปกติ (ไม่มีรายงานอุทกภัย)"
-
     return data
 
 def draw_dashboard(data, font_path="THSarabunNew.ttf"):
-    w, h = 1200, 1500
+    w, h = 1200, 1450 # ปรับความสูงลงให้กระชับขึ้น
     img = Image.new('RGB', (w, h), color='#1e1e2e')
     draw = ImageDraw.Draw(img)
 
@@ -78,7 +71,7 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         f_info = ImageFont.truetype(font_path, 38)
         f_rain_icon = ImageFont.truetype(font_path, 90)
         f_rain_val = ImageFont.truetype(font_path, 50)
-        f_status_icon = ImageFont.truetype(font_path, 65)
+        f_status_icon = ImageFont.truetype(font_path, 80) # ขยายไอคอนให้เด่นขึ้น
     except:
         f_title = f_sub = f_label = f_val = f_diff = f_info = f_rain_icon = f_rain_val = f_status_icon = None
 
@@ -94,7 +87,7 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     draw.text((rain_x, rain_y + 60), data['rain_val'], fill="#ffffff", font=f_rain_val, anchor="mm")
     draw.text((rain_x - 140, rain_y + 35), "ปริมาณฝน", fill="#585b70", font=f_sub, anchor="rm")
 
-    # --- Stations Gauges ---
+    # --- Main Gauges (ระดับน้ำ 3 สถานี) ---
     col_w = w // 3
     for i, key in enumerate(['c7a', 'wat', 'bak']):
         st_info = STATIONS_CONFIG[key]
@@ -124,19 +117,19 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         if key == 'c7a':
             draw.text((curr_x, 1030), f"{data.get('c7a_q', '-')} ลบ.ม./วิ", fill="#a6e3a1", font=f_info, anchor="mm")
 
-    # --- Bottom Cards ---
+    # --- ส่วนข้อมูลสรุปด้านล่าง (Clean Infographic) ---
     info_y = 1130
+    card_h = 180 # ลดความสูงลงให้พอดีกับแค่หัวข้อ
+    
     # อ่างเก็บน้ำ
-    draw.rounded_rectangle([50, info_y, w/2 - 20, info_y + 220], radius=25, fill="#11111b", outline="#313244")
+    draw.rounded_rectangle([50, info_y, w/2 - 20, info_y + card_h], radius=25, fill="#11111b", outline="#313244")
     draw.text((w/4 + 10, info_y + 60), "🚫", font=f_status_icon, anchor="mm")
-    draw.text((w/4 + 10, info_y + 130), "อ่างเก็บน้ำ", fill="#89b4fa", font=f_label, anchor="mm")
-    draw.text((w/4 + 10, info_y + 190), data['reservoir_status'], fill="#bac2de", font=f_info, anchor="mm")
+    draw.text((w/4 + 10, info_y + 125), "อ่างเก็บน้ำ", fill="#89b4fa", font=f_label, anchor="mm")
 
     # อุทกภัย
-    draw.rounded_rectangle([w/2 + 20, info_y, w - 50, info_y + 220], radius=25, fill="#11111b", outline="#313244")
+    draw.rounded_rectangle([w/2 + 20, info_y, w - 50, info_y + card_h], radius=25, fill="#11111b", outline="#313244")
     draw.text((3*w/4 - 10, info_y + 60), "✅", font=f_status_icon, anchor="mm")
-    draw.text((3*w/4 - 10, info_y + 130), "สถานการณ์อุทกภัย", fill="#a6e3a1", font=f_label, anchor="mm")
-    draw.text((3*w/4 - 10, info_y + 190), data['flood_status'], fill="#bac2de", font=f_info, anchor="mm")
+    draw.text((3*w/4 - 10, info_y + 125), "สถานการณ์อุทกภัย", fill="#a6e3a1", font=f_label, anchor="mm")
 
     draw.text((w/2, h-60), "โครงการชลประทานอ่างทอง สำนักงานชลประทานที่ 12", fill="#585b70", font=f_sub, anchor="mm")
     return img
@@ -149,7 +142,6 @@ st.markdown(f"ระบบรายงานน้ำประจำตำบล
 
 with st.sidebar:
     st.header("⚡ ข้อมูลสถานี C.7A")
-    st.info("พี่โบ้กรอกเลข C.7A ตรงนี้ได้เลยครับ ส่วนที่เหลือค่อยวางในช่องใหญ่")
     c7a_lvl = st.number_input("ระดับน้ำ C.7A (+ม.รทก.)", value=1.46, format="%.2f")
     c7a_diff = st.number_input("เทียบเมื่อวาน (+/-)", value=0.02, format="%.2f")
     c7a_q = st.text_input("ปริมาณน้ำไหลผ่าน (ลบ.ม./วิ)", value="130")
@@ -174,7 +166,7 @@ with col2:
             st.download_button("💾 ดาวน์โหลดรูปภาพ PNG", data=buf.getvalue(), 
                                file_name=f"RID_AngThong_{report_data['date']}.png", mime="image/png", use_container_width=True)
     else:
-        st.info("💡 วางข้อความรายงานทางซ้ายมือ แล้วกดปุ่มประมวลผลได้เลยครับ")
+        st.info("💡 พี่โบ้วางข้อความรายงานทางซ้ายมือ แล้วกดปุ่มประมวลผลได้เลยครับ")
 
 st.divider()
-st.caption("พัฒนาโดยคู่คิด AI | สนับสนุนงานวิศวกรรมชลประทานอ่างทอง")
+st.caption("พัฒนาโดยคู่คิด AI | Rid Angthong United")
