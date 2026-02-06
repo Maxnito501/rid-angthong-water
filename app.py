@@ -18,12 +18,11 @@ def parse_text(text):
     date_match = re.search(r"ประจำวันที่\s*(.*)", text)
     data['date'] = date_match.group(1).strip() if date_match else datetime.now().strftime("%d %B %Y")
     
-    # ข้อ 1: ปริมาณฝน (ปรับปรุงใหม่)
+    # ข้อ 1: ปริมาณฝน
     if "ไม่มีฝน" in text:
         data['rain_val'] = "-"
         data['has_rain'] = False
     else:
-        # ดึงตัวเลขและหน่วย ม.ม.
         rain_match = re.search(r"(\d+\.?\d*)\s*ม\.ม\.", text)
         if rain_match:
             data['rain_val'] = f"{rain_match.group(1)} มม."
@@ -80,10 +79,11 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         f_title = ImageFont.truetype(font_path, 60)
         f_sub = ImageFont.truetype(font_path, 40)
         f_label = ImageFont.truetype(font_path, 45)
-        f_val = ImageFont.truetype(font_path, 70)
+        # ปรับขนาดฟอนต์ระดับน้ำเหลือ 45 ให้เท่ากับชื่อสถานี
+        f_val = ImageFont.truetype(font_path, 45)
         f_diff = ImageFont.truetype(font_path, 35)
         f_info = ImageFont.truetype(font_path, 38)
-        f_rain_icon = ImageFont.truetype(font_path, 80) # ฟอนต์ขนาดใหญ่สำหรับไอคอน
+        f_rain_icon = ImageFont.truetype(font_path, 80)
         f_rain_val = ImageFont.truetype(font_path, 50)
     except:
         f_title = f_sub = f_label = f_val = f_diff = f_info = f_rain_icon = f_rain_val = None
@@ -93,13 +93,11 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     draw.text((w/2, 60), "รายงานสถานการณ์น้ำรายวัน จังหวัดอ่างทอง", fill="#89b4fa", font=f_title, anchor="mm")
     draw.text((w/2, 120), f"ข้อมูล {data['date']}", fill="#f9e2af", font=f_sub, anchor="mm")
     
-    # --- ข้อ 1: ปริมาณฝน (Graphic Update) ---
+    # --- ข้อ 1: ปริมาณฝน ---
     rain_box_x = w/2
     rain_box_y = 220
-    # วาดสัญลักษณ์
     icon = "🌧" if data['has_rain'] else "☁️"
     draw.text((rain_box_x, rain_box_y), icon, fill="#89b4fa", font=f_rain_icon, anchor="mm")
-    # วาดตัวเลขด้านล่าง
     draw.text((rain_box_x, rain_box_y + 60), data['rain_val'], fill="#ffffff", font=f_rain_val, anchor="mm")
     draw.text((rain_box_x - 120, rain_box_y + 30), "ปริมาณฝน", fill="#585b70", font=f_sub, anchor="rm")
 
@@ -125,6 +123,7 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         draw.line([t_x1-30, b_y, t_x2+30, b_y], fill="#f38ba8", width=6)
         draw.text((t_x2+40, b_y), f"ตลิ่ง {st_info['bank']:.2f}", fill="#f38ba8", font=f_diff, anchor="lm")
 
+        # แสดงระดับน้ำด้วยขนาดที่เล็กลงเท่าชื่อสถานี
         draw.text((curr_x, 920), f"+{st_val:.2f} ม.รทก.", fill="#cdd6f4", font=f_val, anchor="mm")
         diff_color = "#f38ba8" if st_diff > 0 else ("#89b4fa" if st_diff < 0 else "#bac2de")
         draw.text((curr_x, 980), f"({st_diff:+.2f} ม.)", fill=diff_color, font=f_diff, anchor="mm")
@@ -146,7 +145,7 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
 st.set_page_config(page_title="RID Ang Thong Dashboard", layout="wide")
 
 st.title("🌊 RID Ang Thong Smart Dashboard v1.2")
-st.markdown("ระบบแปลงรายงานข้อความ LINE เป็น Infographic (ปรับปรุงส่วนปริมาณฝน)")
+st.markdown("ระบบแปลงรายงานข้อความ LINE เป็น Infographic")
 
 col1, col2 = st.columns([1, 1.5])
 
