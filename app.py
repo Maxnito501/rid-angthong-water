@@ -78,23 +78,27 @@ def draw_report_book(draw, x, y, size, color):
     draw.line([x+8, y+8, x+size//2-5, y+8], fill=color, width=2)
 
 def draw_indicator(draw, x, y, size, color, direction="left"):
-    # วาดสามเหลี่ยมชี้ระดับ (Pointer)
     if direction == "left":
         points = [(x, y), (x - size, y - size//1.5), (x - size, y + size//1.5)]
     else:
         points = [(x, y), (x + size, y - size//1.5), (x + size, y + size//1.5)]
     draw.polygon(points, fill=color)
 
-def draw_staff_gauge(draw, x1, y1, x2, y2, max_val, bank_val, water_val, f_scale, curr_x):
-    # 1. วาดแผ่นสตาฟเกจ
-    draw.rectangle([x1, y1, x2, y2], fill="#FFFFFF", outline="#000000", width=2)
-    total_h = y2 - y1
+def draw_staff_gauge_overflow(draw, x1, y1_max, x2, y2, max_val, bank_val, water_val, f_scale):
+    """ฟังก์ชันวาดสตาฟเกจแบบน้ำล้นไม้ได้ (v1.16)"""
+    total_draw_h = y2 - y1_max
     
-    # 2. วาดขีดสเกล
-    num_ticks = int(max_val * 10)
+    # คำนวณตำแหน่ง Y ของตลิ่ง (นี่คือหัวของไม้บรรทัดสตาฟเกจ)
+    y_at_bank = y2 - (total_draw_h * (bank_val / max_val))
+    
+    # 1. วาดไม้บรรทัดสตาฟเกจ (วาดถึงแค่ระดับตลิ่งพอ)
+    draw.rectangle([x1, y_at_bank, x2, y2], fill="#FFFFFF", outline="#000000", width=2)
+    
+    # 2. วาดขีดสเกลบนไม้บรรทัด (วาดถึงแค่ bank_val)
+    num_ticks = int(bank_val * 10)
     for i in range(num_ticks + 1):
         tick_val = i / 10.0
-        tick_y = y2 - (tick_val / max_val * total_h)
+        tick_y = y2 - (tick_val / max_val * total_draw_h)
         if i % 10 == 0:
             draw.line([x1, tick_y, x1 + 20, tick_y], fill="#000000", width=2)
             if tick_val > 0:
@@ -102,20 +106,19 @@ def draw_staff_gauge(draw, x1, y1, x2, y2, max_val, bank_val, water_val, f_scale
         elif i % 2 == 0:
             draw.line([x1, tick_y, x1 + 10, tick_y], fill="#000000", width=1)
 
-    # 3. วาดระดับน้ำ
-    water_h_ratio = min(water_val / max_val, 1.0)
-    w_top = y2 - (total_h * water_h_ratio)
+    # 3. วาดระดับน้ำ (ถ้าน้ำสูงกว่า bank_val จะล้นไม้บรรทัดขึ้นมา)
+    w_top = y2 - (total_draw_h * (water_val / max_val))
     if water_val > 0:
-        draw.rectangle([x1+2, max(w_top, y1), x2-2, y2-2], fill=WATER_COLOR)
-        # สัญลักษณ์ระดับน้ำหน้าหลอด (สามเหลี่ยมสีน้ำเงิน)
+        # ระดับน้ำสีน้ำเงิน
+        draw.rectangle([x1+2, max(w_top, y1_max), x2-2, y2-2], fill=WATER_COLOR)
+        # ลูกศรชี้ระดับน้ำ (ชี้หน้าหลอด)
         draw_indicator(draw, x1 - 5, w_top, 20, WATER_COLOR, "left")
 
-    # 4. วาดตลิ่งและสัญลักษณ์
-    b_y = y2 - (total_h * (bank_val / max_val))
-    draw.line([x1, b_y, x2, b_y], fill="#FF1744", width=5)
-    # สัญลักษณ์ระดับตลิ่งหน้าหลอด (สามเหลี่ยมสีแดง)
-    draw_indicator(draw, x1 - 5, b_y, 20, "#FF1744", "left")
-    return b_y
+    # 4. วาดตลิ่งและลูกศรตลิ่ง (สีแดง)
+    draw.line([x1, y_at_bank, x2, y_at_bank], fill="#FF1744", width=5)
+    draw_indicator(draw, x1 - 5, y_at_bank, 20, "#FF1744", "left")
+    
+    return y_at_bank
 
 def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     w, h = 1200, 1550
@@ -161,14 +164,15 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         draw_location_pin(draw, curr_x - 130, card_y + 65, 40, HEADER_COLOR)
         draw.text((curr_x + 15, card_y + 65), st_info['label'], fill=HEADER_COLOR, font=f_label, anchor="mm")
         
-        # วาด Staff Gauge และรับตำแหน่ง Y ของตลิ่งเพื่อวางตัวหนังสือด้านข้าง
-        t_x1, t_y1, t_x2, t_y2 = curr_x-40, card_y+140, curr_x+40, 950
-        b_y_pos = draw_staff_gauge(draw, t_x1, t_y1, t_x2, t_y2, st_info['max'], st_info['bank'], st_lvl, f_scale, curr_x)
+        # วาด Staff Gauge (ความสูงหลอดจำกัดที่ตลิ่ง แต่น้ำล้นได้)
+        # กำหนดเพดานวาดรูปน้ำไว้ที่ y_max (card_y+140) แต่ตัวไม้จบที่ y_at_bank
+        t_x1, t_y1_max, t_x2, t_y2 = curr_x-40, card_y+140, curr_x+40, 950
+        y_bank_pos = draw_staff_gauge_overflow(draw, t_x1, t_y1_max, t_x2, t_y2, st_info['max'], st_info['bank'], st_lvl, f_scale)
             
-        # วางตัวหนังสือ "ตลิ่ง" ไว้ด้านขวาของหลอด เพื่อไม่ให้ทับหลอด
-        draw.text((t_x2 + 10, b_y_pos), f"ตลิ่ง +{st_info['bank']:.2f}", fill="#FF1744", font=f_diff, anchor="lm")
+        # ตัวหนังสือ "ตลิ่ง" ด้านขวา
+        draw.text((t_x2 + 10, y_bank_pos), f"ตลิ่ง +{st_info['bank']:.2f}", fill="#FF1744", font=f_diff, anchor="lm")
 
-        # ข้อมูลระดับน้ำ (ขนาดเท่าชื่อสถานี)
+        # ข้อมูลระดับน้ำ
         draw.text((curr_x, 1020), f"+{st_lvl:.2f} ม.รทก.", fill="#0D47A1", font=f_val, anchor="mm")
         color_diff = "#D32F2F" if st_diff > 0 else ("#1976D2" if st_diff < 0 else "#424242")
         draw.text((curr_x, 1085), f"({st_diff:+.2f} ม.)", fill=color_diff, font=f_diff, anchor="mm")
@@ -178,7 +182,6 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     # Bottom Cards
     bot_y = 1240
     card_h = 190
-    # อ่างเก็บน้ำ
     draw.rounded_rectangle([50, bot_y, w/2 - 25, bot_y + card_h], radius=50, fill="#FFFFFF", outline="#BDBDBD", width=2)
     if data.get('has_reservoir', False):
         draw.text((w/4 - 100, bot_y + 95), "มี", fill="#D32F2F", font=f_alert, anchor="mm")
@@ -186,7 +189,6 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         draw_no_icon(draw, w/4 - 100, bot_y + 95, 70, "#D32F2F")
     draw.text((w/4 + 45, bot_y + 95), "อ่างเก็บน้ำ", fill=HEADER_COLOR, font=f_label, anchor="mm")
 
-    # อุทกภัย
     draw.rounded_rectangle([w/2 + 25, bot_y, w - 50, bot_y + card_h], radius=50, fill="#FFFFFF", outline="#BDBDBD", width=2)
     if data.get('has_flood', False):
         draw.text((3*w/4 - 110, bot_y + 95), "มี", fill="#D32F2F", font=f_alert, anchor="mm")
@@ -222,18 +224,18 @@ col1, col2 = st.columns([1, 1.5])
 with col1:
     st.subheader("📝 ข้อมูลจาก LINE")
     manual_input = st.text_area("วางข้อความรายงานที่นี่:", height=520, placeholder="คัดลอกรายงานประจำวันมาวางที่นี่...")
-    process_btn = st.button("🚀 สร้าง Dashboard v1.15", use_container_width=True)
+    process_btn = st.button("🚀 สร้าง Dashboard ล้นตลิ่ง v1.16", use_container_width=True)
 
 with col2:
     if process_btn:
         auto_data = {'level': c7a_lvl, 'diff': c7a_diff, 'q': c7a_q} if use_auto_c7a else None
-        with st.spinner('กำลังวาด Dashboard v1.15...'):
+        with st.spinner('กำลังคำนวณระดับน้ำล้นตลิ่ง...'):
             report_data = parse_report(manual_input, auto_data, (flood_status == "มี"), (res_status == "มี"))
             final_img = draw_dashboard(report_data)
-            st.image(final_img, caption="RID Ang Thong UNITED v1.15", use_column_width=True)
+            st.image(final_img, caption="RID Ang Thong UNITED v1.16 - Overflow Gauge", use_column_width=True)
             buf = io.BytesIO()
             final_img.save(buf, format="PNG")
-            st.download_button("💾 ดาวน์โหลดภาพ PNG", data=buf.getvalue(), file_name=f"RID_United_v1.15_{report_data['date']}.png", mime="image/png", use_container_width=True)
+            st.download_button("💾 ดาวน์โหลดภาพ PNG", data=buf.getvalue(), file_name=f"RID_United_Overflow_v1.16_{report_data['date']}.png", mime="image/png", use_container_width=True)
     else:
         st.info("💡 พี่โบ้วางข้อความรายงานทางซ้ายมือ แล้วกดปุ่มประมวลผลครับ")
 
