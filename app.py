@@ -33,7 +33,6 @@ def parse_report(manual_text, c7a_manual_data=None, use_c7a_manual=True, manual_
 
     # 2. Water Level Extraction Logic
     def extract_val(key, text):
-        # รองรับทั้งชื่อย่อและชื่อเต็ม
         p_lvl = rf"{key}.*?ระดับน้ำ\s*[\+]\s*([\d\.\s]+).*?\(([\+\-\d\.\s]+)\s*ม\.\)"
         p_q = rf"{key}.*?(?:มีปริมาณน้ำไหลผ่าน|ปริมาณน้ำผ่าน|ปริมาณ)\s*([\d\.\-\s,]+)\s*(?:ลบ\.ม\./วิ|ลบ\.ม\./วินาที|ลม\.ม/วินาที)"
         m_lvl = re.search(p_lvl, text, re.S | re.IGNORECASE)
@@ -43,11 +42,9 @@ def parse_report(manual_text, c7a_manual_data=None, use_c7a_manual=True, manual_
         q = m_q.group(1).strip() if m_q else "-"
         return lvl, diff, q
 
-    # สถานีรอง ดึงจากข้อความเสมอ
     data['wat'] = extract_val("วัดตูม", manual_text)[:2]
     data['bak'] = extract_val("บางจัก", manual_text)[:2]
 
-    # สถานีหลัก C.7A เลือกได้ว่าจะเอาจากไหน
     if use_c7a_manual and c7a_manual_data:
         data['c7a'] = (c7a_manual_data['level'], c7a_manual_data['diff'])
         data['c7a_q'] = c7a_manual_data['q']
@@ -77,14 +74,12 @@ def draw_location_pin(draw, x, y, size, color):
     draw.polygon([x-size//4, y-size//4, x+size//4, y-size//4, x, y+size//4], fill=color)
 
 def draw_report_book(draw, x, y, size, color):
-    # ไอคอนหนังสือเปิดรายงาน 📖
     draw.rectangle([x-size//2, y-size//3, x+size//2, y+size//3], outline=color, width=3)
     draw.line([x, y-size//3, x, y+size//3], fill=color, width=3)
     draw.line([x+8, y-10, x+size//2-5, y-10], fill=color, width=2)
     draw.line([x+8, y+8, x+size//2-5, y+8], fill=color, width=2)
 
 def draw_indicator(draw, x, y, size, color, direction="left"):
-    # สามเหลี่ยมชี้ระดับหน้าหลอด
     if direction == "left":
         points = [(x, y), (x - size, y - size//1.5), (x - size, y + size//1.5)]
     else:
@@ -92,15 +87,9 @@ def draw_indicator(draw, x, y, size, color, direction="left"):
     draw.polygon(points, fill=color)
 
 def draw_staff_gauge_v17(draw, x1, y1_top_bound, x2, y2, max_val, bank_val, water_val, f_scale):
-    """วาดเกจวัดน้ำ: ไม้บรรทัดสิ้นสุดที่ตลิ่ง แต่น้ำล้นขึ้นไปได้"""
     total_h = y2 - y1_top_bound
-    # ตำแหน่ง Y ของตลิ่ง (จุดสูงสุดของไม้สตาฟ)
     y_at_bank = y2 - (total_h * (bank_val / max_val))
-    
-    # 1. วาดไม้สตาฟเกจสีขาว (ยาวแค่ตลิ่งพอ)
     draw.rectangle([x1, y_at_bank, x2, y2], fill="#FFFFFF", outline="#000000", width=2)
-    
-    # 2. วาดสเกลบนไม้
     num_ticks = int(bank_val * 10)
     for i in range(num_ticks + 1):
         tick_val = i / 10.0
@@ -111,19 +100,12 @@ def draw_staff_gauge_v17(draw, x1, y1_top_bound, x2, y2, max_val, bank_val, wate
                 draw.text((x1 + 25, tick_y), str(int(tick_val)), fill="#000000", font=f_scale, anchor="lm")
         elif i % 2 == 0:
             draw.line([x1, tick_y, x1 + 10, tick_y], fill="#000000", width=1)
-
-    # 3. วาดระดับน้ำ (น้ำเงินสด) ล้นไม้ได้
     w_top = y2 - (total_h * (water_val / max_val))
     if water_val > 0:
-        # แถบน้ำ
         draw.rectangle([x1+2, max(w_top, y1_top_bound), x2-2, y2-2], fill=WATER_COLOR)
-        # ลูกศรชี้ระดับน้ำ (หน้าหลอด)
         draw_indicator(draw, x1 - 5, w_top, 20, WATER_COLOR, "left")
-
-    # 4. วาดระดับตลิ่งและลูกศรตลิ่ง (แดง)
     draw.line([x1, y_at_bank, x2, y_at_bank], fill="#FF1744", width=5)
     draw_indicator(draw, x1 - 5, y_at_bank, 20, "#FF1744", "left")
-    
     return y_at_bank
 
 def draw_dashboard(data, font_path="THSarabunNew.ttf"):
@@ -134,8 +116,8 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     try:
         f_title = ImageFont.truetype(font_path, 80)
         f_sub = ImageFont.truetype(font_path, 45)
-        f_label = ImageFont.truetype(font_path, 50) # ขนาด 50 มาตรฐาน
-        f_val = ImageFont.truetype(font_path, 50)   # ขนาด 50 มาตรฐาน
+        f_label = ImageFont.truetype(font_path, 50) 
+        f_val = ImageFont.truetype(font_path, 50)   
         f_diff = ImageFont.truetype(font_path, 40)
         f_info = ImageFont.truetype(font_path, 42)
         f_rain_val = ImageFont.truetype(font_path, 75)
@@ -150,10 +132,10 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     draw.text((w/2, 175), "รายงานสถานการณ์น้ำรายวัน", fill="#FFFFFF", font=f_title, anchor="mm")
     draw.text((w/2, 265), f"ณ วันที่ {data['date']}", fill="#FFEA00", font=f_sub, anchor="mm")
     
-    # Rain Section (ฝนสูงสุด)
+    # Rain Section
     rain_card_y = 315
     draw.rounded_rectangle([w/2 - 280, rain_card_y, w/2 + 280, rain_card_y + 160], radius=45, fill="#FFFFFF", outline=HEADER_COLOR, width=5)
-    draw_rain_icon(draw, w/2 - 190, rain_card_y + 80, 80, HEADER_COLOR)
+    draw_rain_icon(draw, w/2 - 180, rain_card_y + 80, 80, HEADER_COLOR)
     draw.text((w/2 + 60, rain_card_y + 50), "ฝนสูงสุด", fill=HEADER_COLOR, font=f_label, anchor="mm")
     rain_val_color = "#D32F2F" if data['has_rain'] else HEADER_COLOR
     draw.text((w/2 + 60, rain_card_y + 110), data['rain_val'], fill=rain_val_color, font=f_rain_val, anchor="mm")
@@ -165,21 +147,12 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         st_info = STATIONS_CONFIG[key]
         st_lvl, st_diff = data[key]
         curr_x = (i * col_w) + (col_w / 2)
-        
         draw.rounded_rectangle([i*col_w+25, card_y, (i+1)*col_w-25, 1200], radius=50, fill="#FFFFFF")
-        
-        # ไอคอนหมุด เยื้องหน้า 2 ระยะ
         draw_location_pin(draw, curr_x - 130, card_y + 65, 40, HEADER_COLOR)
         draw.text((curr_x + 15, card_y + 65), st_info['label'], fill=HEADER_COLOR, font=f_label, anchor="mm")
-        
-        # Staff Gauge (สิ้นสุดที่ตลิ่ง)
         t_x1, t_y1_bound, t_x2, t_y2 = curr_x-40, card_y+140, curr_x+40, 950
         y_bank = draw_staff_gauge_v17(draw, t_x1, t_y1_bound, t_x2, t_y2, st_info['max'], st_info['bank'], st_lvl, f_scale)
-            
-        # ตัวหนังสือตลิ่ง ด้านขวาหลอด
         draw.text((t_x2 + 10, y_bank), f"ตลิ่ง +{st_info['bank']:.2f}", fill="#FF1744", font=f_diff, anchor="lm")
-
-        # ข้อมูลระดับน้ำ (ขนาด 50)
         draw.text((curr_x, 1020), f"+{st_lvl:.2f} ม.รทก.", fill="#0D47A1", font=f_val, anchor="mm")
         color_diff = "#D32F2F" if st_diff > 0 else ("#1976D2" if st_diff < 0 else "#424242")
         draw.text((curr_x, 1085), f"({st_diff:+.2f} ม.)", fill=color_diff, font=f_diff, anchor="mm")
@@ -189,8 +162,7 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     # Bottom Cards
     bot_y = 1240
     card_h = 190
-    
-    # อ่างเก็บน้ำ
+    # อ่างเก็บน้ำ (เช็คสถานะจากข้อมูล)
     draw.rounded_rectangle([50, bot_y, w/2 - 25, bot_y + card_h], radius=50, fill="#FFFFFF", outline="#BDBDBD", width=2)
     if data.get('has_reservoir', False):
         draw.text((w/4 - 100, bot_y + 95), "มี", fill="#D32F2F", font=f_alert, anchor="mm")
@@ -198,7 +170,7 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         draw_no_icon(draw, w/4 - 100, bot_y + 95, 70, "#D32F2F")
     draw.text((w/4 + 45, bot_y + 95), "อ่างเก็บน้ำ", fill=HEADER_COLOR, font=f_label, anchor="mm")
 
-    # อุทกภัย
+    # อุทกภัย (เช็คสถานะจากข้อมูล)
     draw.rounded_rectangle([w/2 + 25, bot_y, w - 50, bot_y + card_h], radius=50, fill="#FFFFFF", outline="#BDBDBD", width=2)
     if data.get('has_flood', False):
         draw.text((3*w/4 - 110, bot_y + 95), "มี", fill="#D32F2F", font=f_alert, anchor="mm")
@@ -222,13 +194,11 @@ with st.sidebar:
     st.header("⚙️ ตั้งค่าข้อมูล C.7A")
     use_manual_c7a = st.checkbox("เลือกกรอกข้อมูล C.7A เอง", value=True)
     if use_manual_c7a:
-        st.info("💡 กรอกข้อมูล C.7A ที่ดึงจากหน้าเว็บกรมฯ โดยตรง")
         c7a_lvl = st.number_input("ระดับน้ำ C.7A (+ม.รทก.)", value=1.46, format="%.2f")
         c7a_diff = st.number_input("เทียบเมื่อวาน (+/-)", value=0.02, format="%.2f")
         c7a_q = st.text_input("ปริมาณน้ำไหลผ่าน (ลบ.ม./วิ)", value="130")
         c7a_data = {'level': c7a_lvl, 'diff': c7a_diff, 'q': c7a_q}
     else:
-        st.warning("⚠️ ระบบจะดึงข้อมูล C.7A จากข้อความ LINE ด้านขวา")
         c7a_data = None
     
     st.divider()
@@ -244,8 +214,15 @@ with col1:
 
 with col2:
     if process_btn:
-        with st.spinner('กำลังประมวลผลข้อมูลผสม...'):
-            report_data = parse_report(manual_input, c7a_data, use_manual_c7a, (flood_status == "มี"), ("มี" in res_status))
+        with st.spinner('กำลังประมวลผลข้อมูล...'):
+            # แก้ไขตรรกะการตรวจสอบสถานะ (Check status correctly)
+            report_data = parse_report(
+                manual_input, 
+                c7a_data, 
+                use_manual_c7a, 
+                (flood_status == "มี"), 
+                (res_status == "มี") # ตรวจสอบแบบ String match เป๊ะๆ
+            )
             final_img = draw_dashboard(report_data)
             st.image(final_img, caption="RID Ang Thong UNITED v1.17", use_column_width=True)
             buf = io.BytesIO()
