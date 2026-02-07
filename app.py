@@ -6,9 +6,9 @@ from datetime import datetime
 
 # --- Configuration & Theme Settings ---
 STATIONS_CONFIG = {
-    'c7a': {'label': 'C.7A เจ้าพระยา', 'bank': 10.00, 'max': 12.0, 'color': '#007BFF'},
-    'wat': {'label': 'แม่น้ำน้อย (วัดตูม)', 'bank': 6.50, 'max': 8.0, 'color': '#28A745'},
-    'bak': {'label': 'แม่น้ำน้อย (บางจัก)', 'bank': 5.00, 'max': 6.5, 'color': '#E67E22'}
+    'c7a': {'label': 'ม.เจ้าพระยา (C.7A)', 'bank': 10.00, 'max': 12.0, 'color': '#007BFF'},
+    'wat': {'label': 'ม.น้อย (วัดตูม)', 'bank': 6.50, 'max': 8.0, 'color': '#28A745'},
+    'bak': {'label': 'ม.น้อย (บางจัก)', 'bank': 5.00, 'max': 6.5, 'color': '#E67E22'}
 }
 
 # กำหนดสีพื้นหลังที่นี่เพื่อให้ใช้ได้ทั้งในภาพและบนเว็บ
@@ -34,13 +34,16 @@ def parse_report(manual_text, c7a_auto_data=None):
     def extract_val(key, text):
         p_lvl = rf"{key}.*?ระดับน้ำ\s*[\+]\s*([\d\.\s]+).*?\(([\+\-\d\.\s]+)\s*ม\.\)"
         p_q = rf"{key}.*?(?:มีปริมาณน้ำไหลผ่าน|ปริมาณน้ำผ่าน|ปริมาณ)\s*([\d\.\-\s,]+)\s*(?:ลบ\.ม\./วิ|ลบ\.ม\./วินาที|ลม\.ม/วินาที)"
+        
         m_lvl = re.search(p_lvl, text, re.S | re.IGNORECASE)
         m_q = re.search(p_q, text, re.S | re.IGNORECASE)
+        
         lvl = float(m_lvl.group(1).replace(" ", "")) if m_lvl else 0.0
         diff = float(m_lvl.group(2).replace(" ", "")) if m_lvl else 0.0
         q = m_q.group(1).strip() if m_q else "-"
         return lvl, diff, q
 
+    # ใช้ชื่อคีย์เดิมในการค้นหา แต่จะแสดงผลด้วยป้ายใหม่จาก CONFIG
     data['wat'] = extract_val("วัดตูม", manual_text)[:2]
     data['bak'] = extract_val("บางจัก", manual_text)[:2]
 
@@ -54,7 +57,7 @@ def parse_report(manual_text, c7a_auto_data=None):
 
     return data
 
-# --- Custom Drawing Helpers ---
+# --- Custom Drawing Helpers (Graphic-based icons) ---
 def draw_rain_icon(draw, x, y, size, color):
     draw.ellipse([x-size//2, y-size//3, x, y+size//4], fill=color)
     draw.ellipse([x-size//4, y-size//2, x+size//2, y+size//4], fill=color)
@@ -82,7 +85,7 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     try:
         f_title = ImageFont.truetype(font_path, 80)
         f_sub = ImageFont.truetype(font_path, 45)
-        f_label = ImageFont.truetype(font_path, 50)
+        f_label = ImageFont.truetype(font_path, 50) # ขนาดชื่อสถานี
         f_val = ImageFont.truetype(font_path, 55)
         f_diff = ImageFont.truetype(font_path, 40)
         f_info = ImageFont.truetype(font_path, 42)
@@ -90,19 +93,24 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     except:
         f_title = f_sub = f_label = f_val = f_diff = f_info = f_rain_val = None
 
+    # --- Header ---
     header_color = "#01579B" 
     draw.rectangle([0, 0, w, 360], fill=header_color)
     draw.text((w/2, 85), "โครงการชลประทานอ่างทอง สำนักงานชลประทานที่ 12", fill="#FFFFFF", font=f_sub, anchor="mm")
     draw.text((w/2, 175), "รายงานสถานการณ์น้ำรายวัน", fill="#FFFFFF", font=f_title, anchor="mm")
     draw.text((w/2, 265), f"ณ วันที่ {data['date']}", fill="#FFEA00", font=f_sub, anchor="mm")
     
+    # --- Rain Section (ปรับขนาด "ฝนสูงสุด" ให้เท่ากับชื่อสถานี) ---
     rain_card_y = 315
     draw.rounded_rectangle([w/2 - 280, rain_card_y, w/2 + 280, rain_card_y + 160], radius=45, fill="#FFFFFF", outline=header_color, width=5)
     draw_rain_icon(draw, w/2 - 160, rain_card_y + 80, 80, header_color)
-    draw.text((w/2 + 60, rain_card_y + 50), "ฝนสูงสุด", fill="#333333", font=f_sub, anchor="mm")
+    
+    # ใช้ f_label เพื่อให้ขนาดเท่ากับชื่อสถานี
+    draw.text((w/2 + 60, rain_card_y + 50), "ฝนสูงสุด", fill="#333333", font=f_label, anchor="mm")
     rain_color = "#D32F2F" if data['has_rain'] else header_color
     draw.text((w/2 + 60, rain_card_y + 110), data['rain_val'], fill=rain_color, font=f_rain_val, anchor="mm")
 
+    # --- Main Stations Section ---
     col_w = w // 3
     card_y = 510
     
@@ -111,12 +119,16 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         st_lvl, st_diff = data[key]
         curr_x = (i * col_w) + (col_w / 2)
         
+        # Shadow effect
         draw.rounded_rectangle([i*col_w+35, card_y+8, (i+1)*col_w-15, 1208], radius=50, fill="#81D4FA") 
+        # White Card
         draw.rounded_rectangle([i*col_w+25, card_y, (i+1)*col_w-25, 1200], radius=50, fill="#FFFFFF")
         
+        # Station Icon & Label
         draw_location_pin(draw, curr_x - 110, card_y + 65, 40, header_color)
         draw.text((curr_x + 20, card_y + 65), st_info['label'], fill=header_color, font=f_label, anchor="mm")
 
+        # Gauge Design
         t_x1, t_y1, t_x2, t_y2 = curr_x-70, card_y+140, curr_x+70, 950
         draw.rounded_rectangle([t_x1-5, t_y1-5, t_x2+5, t_y2+5], radius=40, fill="#F5F5F5", outline="#BDBDBD", width=3) 
         
@@ -129,6 +141,7 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         draw.line([t_x1-35, b_y, t_x2+35, b_y], fill="#FF1744", width=10)
         draw.text((curr_x, b_y - 30), f"ระดับตลิ่ง {st_info['bank']:.2f}", fill="#FF1744", font=f_diff, anchor="mm")
 
+        # Data Values
         draw.text((curr_x, 1020), f"+{st_lvl:.2f} ม.รทก.", fill="#0D47A1", font=f_val, anchor="mm")
         color_diff = "#D32F2F" if st_diff > 0 else ("#1976D2" if st_diff < 0 else "#424242")
         draw.text((curr_x, 1085), f"({st_diff:+.2f} ม.)", fill=color_diff, font=f_diff, anchor="mm")
@@ -136,8 +149,10 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         if key == 'c7a':
             draw.text((curr_x, 1145), f"{data.get('c7a_q', '-')} ลบ.ม./วิ", fill="#1B5E20", font=f_info, anchor="mm")
 
+    # --- Bottom Action Cards ---
     bot_y = 1240
     card_h = 200
+    
     draw.rounded_rectangle([50, bot_y, w/2 - 25, bot_y + card_h], radius=50, fill="#FFFFFF", outline="#BDBDBD", width=2)
     draw_no_icon(draw, w/4 - 60, bot_y + 100, 70, "#D32F2F")
     draw.text((w/4 + 60, bot_y + 100), "อ่างเก็บน้ำ", fill="#424242", font=f_label, anchor="mm")
@@ -183,11 +198,11 @@ with col2:
         with st.spinner('กำลังสร้างงานกราฟิก...'):
             report_data = parse_report(manual_input, auto_data)
             final_img = draw_dashboard(report_data)
-            st.image(final_img, caption="RID Ang Thong UNITED v1.9", use_column_width=True)
+            st.image(final_img, caption="RID Ang Thong UNITED v1.10", use_column_width=True)
             buf = io.BytesIO()
             final_img.save(buf, format="PNG")
             st.download_button("💾 ดาวน์โหลดภาพ PNG", data=buf.getvalue(), 
-                               file_name=f"RID_United_v1.9_{report_data['date']}.png", mime="image/png", use_container_width=True)
+                               file_name=f"RID_United_v1.10_{report_data['date']}.png", mime="image/png", use_container_width=True)
     else:
         st.info("💡 พี่โบ้วางข้อความรายงานทางซ้ายมือ แล้วกดปุ่มประมวลผลได้เลยครับ")
 
