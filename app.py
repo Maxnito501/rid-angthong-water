@@ -11,9 +11,8 @@ STATIONS_CONFIG = {
     'bak': {'label': 'ม.น้อย (บางจัก)', 'bank': 5.00, 'max': 6.5, 'color': '#E67E22'}
 }
 
-# กำหนดสีพื้นหลังหลัก
 BG_COLOR_HEX = '#B3E5FC' 
-HEADER_COLOR = "#01579B" # สีน้ำเงินเข้มที่เป็นสีหลัก
+HEADER_COLOR = "#01579B" 
 
 def get_thai_date():
     months = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
@@ -53,9 +52,18 @@ def parse_report(manual_text, c7a_auto_data=None):
         data['c7a'] = (c7a_vals[0], c7a_vals[1])
         data['c7a_q'] = c7a_vals[2]
 
+    # 3. Flood Logic (Detecting if there is a flood report)
+    flood_match = re.search(r"4\..*?\n(.*?)\n", manual_text, re.S)
+    flood_txt = flood_match.group(1).strip() if flood_match else ""
+    # ถ้าข้อความไม่มีคำว่า "ปกติ" หรือ "ไม่มีรายงาน" และมีความยาวข้อความ แสดงว่า "มี" อุทกภัย
+    if flood_txt == "" or "ปกติ" in flood_txt or "ไม่มีรายงาน" in flood_txt or "-" in flood_txt:
+        data['has_flood'] = False
+    else:
+        data['has_flood'] = True
+
     return data
 
-# --- Custom Drawing Helpers (Graphic-based icons) ---
+# --- Custom Drawing Helpers ---
 def draw_rain_icon(draw, x, y, size, color):
     draw.ellipse([x-size//2, y-size//3, x, y+size//4], fill=color)
     draw.ellipse([x-size//4, y-size//2, x+size//2, y+size//4], fill=color)
@@ -63,11 +71,8 @@ def draw_rain_icon(draw, x, y, size, color):
         dx = (i-1) * (size//3)
         draw.line([x+dx, y+size//3, x+dx-5, y+size//2+5], fill=color, width=4)
 
-def draw_check_icon(draw, x, y, size, color):
-    draw.line([x-size//3, y, x, y+size//3], fill=color, width=8)
-    draw.line([x, y+size//3, x+size//2, y-size//2], fill=color, width=8)
-
 def draw_no_icon(draw, x, y, size, color):
+    # วาดวงกลมขีดฆ่า (สัญลักษณ์ "ไม่มี")
     draw.ellipse([x-size//2, y-size//2, x+size//2, y+size//2], outline=color, width=6)
     draw.line([x-size//3, y-size//3, x+size//3, y+size//3], fill=color, width=6)
 
@@ -76,10 +81,9 @@ def draw_location_pin(draw, x, y, size, color):
     draw.polygon([x-size//4, y-size//4, x+size//4, y-size//4, x, y+size//4], fill=color)
 
 def draw_report_book(draw, x, y, size, color):
-    # วาดไอคอนสมุดรายงาน (หนังสือเปิด)
     draw.rectangle([x-size//2, y-size//3, x+size//2, y+size//3], outline=color, width=3)
-    draw.line([x, y-size//3, x, y+size//3], fill=color, width=3) # เส้นกลางสมุด
-    draw.line([x+10, y-10, x+size//2-5, y-10], fill=color, width=2) # บรรทัดขวา
+    draw.line([x, y-size//3, x, y+size//3], fill=color, width=3)
+    draw.line([x+10, y-10, x+size//2-5, y-10], fill=color, width=2)
     draw.line([x+10, y+10, x+size//2-5, y+10], fill=color, width=2)
 
 def draw_dashboard(data, font_path="THSarabunNew.ttf"):
@@ -90,85 +94,77 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     try:
         f_title = ImageFont.truetype(font_path, 80)
         f_sub = ImageFont.truetype(font_path, 45)
-        # ปรับขนาดฟอนต์ให้เป็น 50 เท่ากันตามที่พี่โบ้สั่ง
         f_label = ImageFont.truetype(font_path, 50) 
         f_val = ImageFont.truetype(font_path, 50) 
         f_diff = ImageFont.truetype(font_path, 40)
         f_info = ImageFont.truetype(font_path, 42)
         f_rain_val = ImageFont.truetype(font_path, 75)
+        f_flood_alert = ImageFont.truetype(font_path, 65) # ขนาดพิเศษสำหรับคำว่า "มี"
     except:
-        f_title = f_sub = f_label = f_val = f_diff = f_info = f_rain_val = None
+        f_title = f_sub = f_label = f_val = f_diff = f_info = f_rain_val = f_flood_alert = None
 
-    # --- Header ---
+    # Header
     draw.rectangle([0, 0, w, 360], fill=HEADER_COLOR)
     draw.text((w/2, 85), "โครงการชลประทานอ่างทอง สำนักงานชลประทานที่ 12", fill="#FFFFFF", font=f_sub, anchor="mm")
     draw.text((w/2, 175), "รายงานสถานการณ์น้ำรายวัน", fill="#FFFFFF", font=f_title, anchor="mm")
     draw.text((w/2, 265), f"ณ วันที่ {data['date']}", fill="#FFEA00", font=f_sub, anchor="mm")
     
-    # --- Rain Section (ฝนสูงสุด) ---
+    # Rain Section
     rain_card_y = 315
     draw.rounded_rectangle([w/2 - 280, rain_card_y, w/2 + 280, rain_card_y + 160], radius=45, fill="#FFFFFF", outline=HEADER_COLOR, width=5)
     draw_rain_icon(draw, w/2 - 180, rain_card_y + 80, 80, HEADER_COLOR)
-    
-    # ปรับสีขนาดให้เท่ากับชื่อสถานี (f_label, HEADER_COLOR)
     draw.text((w/2 + 60, rain_card_y + 50), "ฝนสูงสุด", fill=HEADER_COLOR, font=f_label, anchor="mm")
     rain_val_color = "#D32F2F" if data['has_rain'] else HEADER_COLOR
     draw.text((w/2 + 60, rain_card_y + 110), data['rain_val'], fill=rain_val_color, font=f_rain_val, anchor="mm")
 
-    # --- Main Stations Section ---
+    # Main Stations Section
     col_w = w // 3
     card_y = 510
-    
     for i, key in enumerate(['c7a', 'wat', 'bak']):
         st_info = STATIONS_CONFIG[key]
         st_lvl, st_diff = data[key]
         curr_x = (i * col_w) + (col_w / 2)
-        
-        # White Card
         draw.rounded_rectangle([i*col_w+25, card_y, (i+1)*col_w-25, 1200], radius=50, fill="#FFFFFF")
-        
-        # ปรับตำแหน่งหมุด PIN ให้เลื่อนมาข้างหน้า (ขยับไปทางซ้ายมากขึ้น)
         draw_location_pin(draw, curr_x - 125, card_y + 65, 40, HEADER_COLOR)
         draw.text((curr_x + 20, card_y + 65), st_info['label'], fill=HEADER_COLOR, font=f_label, anchor="mm")
-
-        # Gauge Drawing
         t_x1, t_y1, t_x2, t_y2 = curr_x-70, card_y+140, curr_x+70, 950
         draw.rounded_rectangle([t_x1-5, t_y1-5, t_x2+5, t_y2+5], radius=40, fill="#F5F5F5", outline="#BDBDBD", width=3) 
         fill_ratio = min(st_lvl / st_info['max'], 1.0)
         w_top = t_y2 - ((t_y2-t_y1) * fill_ratio)
         if st_lvl > 0:
             draw.rounded_rectangle([t_x1, max(w_top, t_y1), t_x2, t_y2], radius=35, fill=st_info['color'])
-
-        # Bank Line
         b_y = t_y2 - ((t_y2-t_y1) * (st_info['bank'] / st_info['max']))
         draw.line([t_x1-35, b_y, t_x2+35, b_y], fill="#FF1744", width=10)
         draw.text((curr_x, b_y - 30), f"ระดับตลิ่ง {st_info['bank']:.2f}", fill="#FF1744", font=f_diff, anchor="mm")
-
-        # ปรับขนาดระดับน้ำให้เท่ากับชื่อสถานี (ใช้ f_val ขนาด 50)
         draw.text((curr_x, 1020), f"+{st_lvl:.2f} ม.รทก.", fill="#0D47A1", font=f_val, anchor="mm")
         color_diff = "#D32F2F" if st_diff > 0 else ("#1976D2" if st_diff < 0 else "#424242")
         draw.text((curr_x, 1085), f"({st_diff:+.2f} ม.)", fill=color_diff, font=f_diff, anchor="mm")
-        
         if key == 'c7a':
             draw.text((curr_x, 1145), f"{data.get('c7a_q', '-')} ลบ.ม./วิ", fill="#1B5E20", font=f_info, anchor="mm")
 
-    # --- Bottom Action Cards ---
+    # --- Bottom Cards (อ่างเก็บน้ำ & อุทกภัย) ---
     bot_y = 1240
     card_h = 190
     
-    # Reservoir Card (ขยับสัญลักษณ์มาข้างหน้า และใช้สีขนาดเดียวกัน)
+    # Reservoir Card (สัญลักษณ์ "ไม่มี" 🚫 เป็นมาตรฐาน)
     draw.rounded_rectangle([50, bot_y, w/2 - 25, bot_y + card_h], radius=50, fill="#FFFFFF", outline="#BDBDBD", width=2)
     draw_no_icon(draw, w/4 - 100, bot_y + 95, 70, "#D32F2F")
     draw.text((w/4 + 40, bot_y + 95), "อ่างเก็บน้ำ", fill=HEADER_COLOR, font=f_label, anchor="mm")
 
-    # Flood Card (ขยับสัญลักษณ์มาข้างหน้า และใช้สีขนาดเดียวกัน)
+    # Flood Card (สัญลักษณ์ 🚫 ถ้าไม่มี / คำว่า "มี" สีแดง ถ้ามีอุทกภัย)
     draw.rounded_rectangle([w/2 + 25, bot_y, w - 50, bot_y + card_h], radius=50, fill="#FFFFFF", outline="#BDBDBD", width=2)
-    draw_check_icon(draw, 3*w/4 - 130, bot_y + 85, 70, "#2E7D32")
-    draw.text((3*w/4 + 20, bot_y + 95), "สถานการณ์อุทกภัย", fill="#2E7D32", font=f_label, anchor="mm")
+    
+    if data.get('has_flood', False):
+        # ถ้ามีอุทกภัย ขึ้นคำว่า "มี" สีแดง
+        draw.text((3*w/4 - 100, bot_y + 95), "มี", fill="#D32F2F", font=f_flood_alert, anchor="mm")
+    else:
+        # ถ้าไม่มี ขึ้นสัญลักษณ์วงกลมขีดฆ่า 🚫 เหมือนกัน
+        draw_no_icon(draw, 3*w/4 - 130, bot_y + 95, 70, "#D32F2F")
+        
+    draw.text((3*w/4 + 20, bot_y + 95), "อุทกภัย", fill=HEADER_COLOR, font=f_label, anchor="mm")
 
-    # Footer พร้อมสัญลักษณ์รูปสมุดรายงานใหม่
-    footer_text = "Rid Angthong United "
-    draw.text((w/2 - 30, h-60), footer_text, fill=HEADER_COLOR, font=f_sub, anchor="mm")
+    # Footer
+    draw.text((w/2 - 30, h-60), "Rid Angthong United ", fill=HEADER_COLOR, font=f_sub, anchor="mm")
     draw_report_book(draw, w/2 + 150, h-60, 50, HEADER_COLOR)
 
     return img
@@ -207,11 +203,11 @@ with col2:
         with st.spinner('กำลังสร้างงานกราฟิก...'):
             report_data = parse_report(manual_input, auto_data)
             final_img = draw_dashboard(report_data)
-            st.image(final_img, caption="RID Ang Thong UNITED v1.11", use_column_width=True)
+            st.image(final_img, caption="RID Ang Thong UNITED v1.12", use_column_width=True)
             buf = io.BytesIO()
             final_img.save(buf, format="PNG")
             st.download_button("💾 ดาวน์โหลดภาพ PNG", data=buf.getvalue(), 
-                               file_name=f"RID_United_v1.11_{report_data['date']}.png", mime="image/png", use_container_width=True)
+                               file_name=f"RID_United_v1.12_{report_data['date']}.png", mime="image/png", use_container_width=True)
     else:
         st.info("💡 พี่โบ้วางข้อความรายงานทางซ้ายมือ แล้วกดปุ่มประมวลผลได้เลยครับ")
 
