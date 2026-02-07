@@ -4,23 +4,22 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 from datetime import datetime
 
-# --- การตั้งค่าสถานีและเกณฑ์วิศวกรรม ---
+# --- Configuration & Theme Settings ---
 STATIONS_CONFIG = {
-    'c7a': {'label': 'C.7A เจ้าพระยา', 'bank': 10.00, 'max': 12.0, 'color': '#007bff'}, # Blue
-    'wat': {'label': 'แม่น้ำน้อย (วัดตูม)', 'bank': 6.50, 'max': 8.0, 'color': '#28a745'}, # Green
-    'bak': {'label': 'แม่น้ำน้อย (บางจัก)', 'bank': 5.00, 'max': 6.5, 'color': '#fd7e14'}  # Orange
+    'c7a': {'label': 'C.7A เจ้าพระยา', 'bank': 10.00, 'max': 12.0, 'color': '#0066cc', 'icon': '💧'},
+    'wat': {'label': 'แม่น้ำน้อย (วัดตูม)', 'bank': 6.50, 'max': 8.0, 'color': '#28a745', 'icon': '💧'},
+    'bak': {'label': 'แม่น้ำน้อย (บางจัก)', 'bank': 5.00, 'max': 6.5, 'color': '#ff8c00', 'icon': '💧'}
 }
 
 def get_thai_date():
-    """ดึงวันที่ปัจจุบันรูปแบบไทย"""
     months = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
     now = datetime.now()
     return f"{now.day} {months[now.month - 1]} {now.year + 543}"
 
 def parse_report(manual_text, c7a_auto_data=None):
-    """ฟังก์ชันดึงข้อมูลแบบผสม (Manual + Auto)"""
     data = {'date': get_thai_date()}
     
+    # 1. Rain Data
     if "ไม่มีฝน" in manual_text:
         data['rain_val'], data['has_rain'] = "-", False
     else:
@@ -28,6 +27,7 @@ def parse_report(manual_text, c7a_auto_data=None):
         data['rain_val'] = f"{rain_match.group(1)} มม." if rain_match else "-"
         data['has_rain'] = True if rain_match else False
 
+    # 2. Water Level Data
     def extract_val(key, text):
         p_lvl = rf"{key}.*?ระดับน้ำ\s*[\+]\s*([\d\.\s]+).*?\(([\+\-\d\.\s]+)\s*ม\.\)"
         p_q = rf"{key}.*?(?:มีปริมาณน้ำไหลผ่าน|ปริมาณน้ำผ่าน|ปริมาณ)\s*([\d\.\-\s,]+)\s*(?:ลบ\.ม\./วิ|ลบ\.ม\./วินาที|ลม\.ม/วินาที)"
@@ -52,131 +52,139 @@ def parse_report(manual_text, c7a_auto_data=None):
     return data
 
 def draw_dashboard(data, font_path="THSarabunNew.ttf"):
-    w, h = 1200, 1500
-    bg_color = '#f4f7f6' # พื้นหลังโทนสว่าง
+    # Canvas Settings
+    w, h = 1200, 1550
+    bg_color = '#F0F2F5' # Modern Light Grey
     img = Image.new('RGB', (w, h), color=bg_color)
     draw = ImageDraw.Draw(img)
 
     try:
-        f_title = ImageFont.truetype(font_path, 65)
-        f_sub = ImageFont.truetype(font_path, 40)
-        f_label = ImageFont.truetype(font_path, 45)
-        f_val = ImageFont.truetype(font_path, 45)
-        f_diff = ImageFont.truetype(font_path, 35)
-        f_info = ImageFont.truetype(font_path, 38)
-        f_rain_icon = ImageFont.truetype(font_path, 100)
-        f_rain_val = ImageFont.truetype(font_path, 55)
-        f_status_icon = ImageFont.truetype(font_path, 90)
+        f_title = ImageFont.truetype(font_path, 75)
+        f_sub = ImageFont.truetype(font_path, 45)
+        f_label = ImageFont.truetype(font_path, 48)
+        f_val = ImageFont.truetype(font_path, 50)
+        f_diff = ImageFont.truetype(font_path, 38)
+        f_info = ImageFont.truetype(font_path, 40)
+        f_rain_icon = ImageFont.truetype(font_path, 110)
+        f_rain_val = ImageFont.truetype(font_path, 65)
+        f_status_icon = ImageFont.truetype(font_path, 95)
     except:
         f_title = f_sub = f_label = f_val = f_diff = f_info = f_rain_icon = f_rain_val = f_status_icon = None
 
-    # --- Header ---
-    header_color = "#004a99" # RID Blue
-    draw.rectangle([0, 0, w, 320], fill=header_color)
-    draw.text((w/2, 80), "รายงานสถานการณ์น้ำรายวัน จังหวัดอ่างทอง", fill="#ffffff", font=f_title, anchor="mm")
-    draw.text((w/2, 145), f"ณ วันที่ {data['date']}", fill="#ffce00", font=f_sub, anchor="mm")
+    # --- Modern Header (White card with accent) ---
+    draw.rectangle([0, 0, w, 350], fill="#003366") # RID Dark Blue
+    draw.text((w/2, 90), "RID ANG THONG UNITED", fill="#FFFFFF", font=f_sub, anchor="mm")
+    draw.text((w/2, 175), "รายงานสถานการณ์น้ำรายวัน", fill="#FFFFFF", font=f_title, anchor="mm")
+    draw.text((w/2, 260), f"ณ วันที่ {data['date']}", fill="#FFD700", font=f_sub, anchor="mm")
     
-    # --- Rain Logo/Section (ข้อ 1) ---
-    rain_x, rain_y = w/2, 230
-    # วาดวงกลมโลโก้ฝน
-    draw.ellipse([rain_x - 140, rain_y - 60, rain_x - 40, rain_y + 40], fill="#ffffff", outline="#004a99", width=2)
+    # --- Hero Section: Rain (ข้อ 1) ---
+    rain_card_y = 300
+    draw.rounded_rectangle([w/2 - 250, rain_card_y, w/2 + 250, rain_card_y + 140], radius=40, fill="#FFFFFF", outline="#003366", width=3)
     icon_rain = "🌧️" if data['has_rain'] else "☀️"
-    draw.text((rain_x - 90, rain_y - 10), icon_rain, fill="#004a99", font=f_rain_icon, anchor="mm")
-    
-    draw.text((rain_x + 20, rain_y - 15), "ปริมาณฝนสะสม", fill="#ffffff", font=f_sub, anchor="lm")
-    draw.text((rain_x + 20, rain_y + 35), data['rain_val'], fill="#ffce00", font=f_rain_val, anchor="lm")
+    draw.text((w/2 - 120, rain_card_y + 70), icon_rain, fill="#003366", font=f_rain_icon, anchor="mm")
+    draw.text((w/2 + 60, rain_card_y + 45), "ปริมาณฝนสะสม", fill="#555555", font=f_sub, anchor="mm")
+    draw.text((w/2 + 60, rain_card_y + 100), data['rain_val'], fill="#003366", font=f_rain_val, anchor="mm")
 
-    # --- Main Gauges (ระดับน้ำ 3 สถานี) ---
+    # --- Main Stations Section ---
     col_w = w // 3
-    card_bg = "#ffffff"
-    text_main = "#333333"
+    card_y = 480
     
     for i, key in enumerate(['c7a', 'wat', 'bak']):
         st_info = STATIONS_CONFIG[key]
         st_lvl, st_diff = data[key]
         curr_x = (i * col_w) + (col_w / 2)
         
-        # การ์ดสถานีพร้อมเงาบางๆ (Subtle Border)
-        draw.rounded_rectangle([i*col_w+30, 350, (i+1)*col_w-30, 1100], radius=30, fill=card_bg, outline="#d1d1d1", width=2)
-        draw.text((curr_x, 410), st_info['label'], fill=header_color, font=f_label, anchor="mm")
+        # Station Card
+        draw.rounded_rectangle([i*col_w+25, card_y, (i+1)*col_w-25, 1180], radius=45, fill="#FFFFFF")
+        
+        # Station Label with Icon
+        draw.text((curr_x, card_y + 60), f"📍 {st_info['label']}", fill="#003366", font=f_label, anchor="mm")
 
-        # Gauge Tank
-        t_x1, t_y1, t_x2, t_y2 = curr_x-60, 500, curr_x+60, 850
-        draw.rectangle([t_x1-5, t_y1-5, t_x2+5, t_y2+5], fill="#e9ecef", outline="#adb5bd")
+        # Gauge Design (Capsule Style)
+        t_x1, t_y1, t_x2, t_y2 = curr_x-65, card_y+130, curr_x+65, 930
+        draw.rounded_rectangle([t_x1-4, t_y1-4, t_x2+4, t_y2+4], radius=30, fill="#E9ECEF") # Tank Background
         
         fill_ratio = min(st_lvl / st_info['max'], 1.0)
         w_top = t_y2 - ((t_y2-t_y1) * fill_ratio)
-        draw.rectangle([t_x1, w_top, t_x2, t_y2], fill=st_info['color'])
+        draw.rounded_rectangle([t_x1, max(w_top, t_y1), t_x2, t_y2], radius=30, fill=st_info['color'])
 
-        # Bank Line
+        # Modern Bank Line
         b_y = t_y2 - ((t_y2-t_y1) * (st_info['bank'] / st_info['max']))
-        draw.line([t_x1-35, b_y, t_x2+35, b_y], fill="#dc3545", width=6)
-        draw.text((t_x2+40, b_y), f"ตลิ่ง {st_info['bank']:.2f}", fill="#dc3545", font=f_diff, anchor="lm")
+        draw.line([t_x1-25, b_y, t_x2+25, b_y], fill="#FF4B4B", width=7)
+        draw.text((curr_x, b_y - 25), f"ระดับตลิ่ง {st_info['bank']:.2f}", fill="#FF4B4B", font=f_diff, anchor="mm")
 
-        # Values (เน้นสีสันสวยงาม)
-        draw.text((curr_x, 930), f"+{st_lvl:.2f} ม.รทก.", fill=text_main, font=f_val, anchor="mm")
+        # Data Texts
+        draw.text((curr_x, 1000), f"+{st_lvl:.2f} ม.รทก.", fill="#333333", font=f_val, anchor="mm")
         
-        color_diff = "#dc3545" if st_diff > 0 else ("#007bff" if st_diff < 0 else "#6c757d")
-        draw.text((curr_x, 985), f"({st_diff:+.2f} ม.)", fill=color_diff, font=f_diff, anchor="mm")
+        color_diff = "#FF4B4B" if st_diff > 0 else ("#0066cc" if st_diff < 0 else "#888888")
+        draw.text((curr_x, 1060), f"({st_diff:+.2f} ม.)", fill=color_diff, font=f_diff, anchor="mm")
         
         if key == 'c7a':
-            draw.text((curr_x, 1045), f"{data.get('c7a_q', '-')} ลบ.ม./วิ", fill="#198754", font=f_info, anchor="mm")
+            draw.text((curr_x, 1120), f"🌊 {data.get('c7a_q', '-')} ลบ.ม./วิ", fill="#28A745", font=f_info, anchor="mm")
 
-    # --- ส่วนข้อมูลสรุปด้านล่าง (Logo Concept) ---
-    info_y = 1150
-    card_h = 220
+    # --- Bottom Action Cards (Status Logos) ---
+    bot_y = 1220
+    card_h = 240
     
-    # โลโก้/การ์ดอ่างเก็บน้ำ
-    draw.rounded_rectangle([50, info_y, w/2 - 20, info_y + card_h], radius=30, fill=card_bg, outline="#d1d1d1", width=2)
-    draw.ellipse([w/4 - 40, info_y + 30, w/4 + 60, info_y + 130], fill="#f8f9fa", outline="#6c757d", width=2)
-    draw.text((w/4 + 10, info_y + 80), "🚫", font=f_status_icon, anchor="mm")
-    draw.text((w/4 + 10, info_y + 165), "อ่างเก็บน้ำ", fill="#6c757d", font=f_label, anchor="mm")
+    # Reservoir Card
+    draw.rounded_rectangle([50, bot_y, w/2 - 25, bot_y + card_h], radius=45, fill="#FFFFFF")
+    draw.text((w/4 + 10, bot_y + 80), "🚫", font=f_status_icon, anchor="mm")
+    draw.text((w/4 + 10, bot_y + 170), "อ่างเก็บน้ำ", fill="#777777", font=f_label, anchor="mm")
 
-    # โลโก้/การ์ดอุทกภัย
-    draw.rounded_rectangle([w/2 + 20, info_y, w - 50, info_y + card_h], radius=30, fill=card_bg, outline="#d1d1d1", width=2)
-    draw.ellipse([3*w/4 - 40, info_y + 30, 3*w/4 + 60, info_y + 130], fill="#f8f9fa", outline="#28a745", width=2)
-    draw.text((3*w/4 + 10, info_y + 80), "✅", font=f_status_icon, anchor="mm")
-    draw.text((3*w/4 + 10, info_y + 165), "สถานการณ์อุทกภัย", fill="#28a745", font=f_label, anchor="mm")
+    # Flood Card
+    draw.rounded_rectangle([w/2 + 25, bot_y, w - 50, bot_y + card_h], radius=45, fill="#FFFFFF")
+    draw.text((3*w/4 - 10, bot_y + 80), "✅", font=f_status_icon, anchor="mm")
+    draw.text((3*w/4 - 10, bot_y + 170), "สถานการณ์อุทกภัย", fill="#28A745", font=f_label, anchor="mm")
 
     # Footer
-    draw.text((w/2, h-60), "โครงการชลประทานอ่างทอง สำนักงานชลประทานที่ 12", fill="#adb5bd", font=f_sub, anchor="mm")
+    draw.text((w/2, h-60), "RID ANG THONG UNITED | โครงการชลประทานอ่างทอง", fill="#AAAAAA", font=f_sub, anchor="mm")
     return img
 
-# --- Streamlit UI ---
-st.set_page_config(page_title="RID Ang Thong UNITED Dashboard", layout="wide")
+# --- Streamlit UI Layout ---
+st.set_page_config(page_title="RID Ang Thong UNITED", layout="wide")
 
-st.title("🛡️ RID Ang Thong UNITED Smart Dashboard v1.6")
-st.markdown(f"ระบบรายงานน้ำประจำตำบล (คู่คิดพี่โบ้) | วันที่: {get_thai_date()}")
+# Custom CSS to make Streamlit look more modern
+st.markdown("""
+    <style>
+    .main { background-color: #F0F2F5; }
+    .stButton>button { border-radius: 20px; background-color: #003366; color: white; border: none; height: 3em; font-weight: bold; }
+    .stTextArea>div>div>textarea { border-radius: 15px; }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title("🛡️ RID Ang Thong UNITED Dashboard")
+st.markdown(f"**Modern Digital Transformation** | ประจำวันที่: {get_thai_date()}")
 
 with st.sidebar:
-    st.header("⚡ ข้อมูลด่วน C.7A")
+    st.header("⚙️ ข้อมูลด่วน C.7A")
     c7a_lvl = st.number_input("ระดับน้ำ C.7A (+ม.รทก.)", value=1.46, format="%.2f")
     c7a_diff = st.number_input("เทียบเมื่อวาน (+/-)", value=0.02, format="%.2f")
     c7a_q = st.text_input("ปริมาณน้ำไหลผ่าน (ลบ.ม./วิ)", value="130")
     use_auto_c7a = st.checkbox("ใช้ข้อมูล C.7A จากฝั่งนี้", value=True)
     st.divider()
-    st.info("💡 เวอร์ชัน Light Edition เน้นความคลีนและดูเป็นมืออาชีพ")
+    st.info("💡 เวอร์ชัน v1.7: Modern UI & Iconography System")
 
 col1, col2 = st.columns([1, 1.5])
 
 with col1:
     st.subheader("📝 คัดลอกข้อมูลจาก LINE")
-    manual_input = st.text_area("วางข้อความรายงานที่นี่:", height=500, placeholder="คัดลอกรายงานจาก LINE มาวางที่นี่...")
-    process_btn = st.button("🚀 ประมวลผลและสร้างอินโฟกราฟิก", use_container_width=True)
+    manual_input = st.text_area("วางข้อความรายงานที่นี่:", height=520, placeholder="คัดลอกรายงานประจำวันมาวางที่นี่...")
+    process_btn = st.button("🚀 สร้างอินโฟกราฟิกแบบ Modern", use_container_width=True)
 
 with col2:
     if process_btn:
         auto_data = {'level': c7a_lvl, 'diff': c7a_diff, 'q': c7a_q} if use_auto_c7a else None
-        with st.spinner('กำลังสร้างกราฟิกสวยๆ ให้พี่โบ้ครับ...'):
+        with st.spinner('กำลังสร้างงานกราฟิกระดับพรีเมียม...'):
             report_data = parse_report(manual_input, auto_data)
             final_img = draw_dashboard(report_data)
-            st.image(final_img, caption="RID Ang Thong UNITED Report Preview", use_column_width=True)
+            st.image(final_img, caption="RID Ang Thong UNITED - Modern Interface", use_column_width=True)
+            
             buf = io.BytesIO()
             final_img.save(buf, format="PNG")
-            st.download_button("💾 ดาวน์โหลดรูปภาพ PNG", data=buf.getvalue(), 
-                               file_name=f"RID_United_{report_data['date']}.png", mime="image/png", use_container_width=True)
+            st.download_button("💾 ดาวน์โหลดภาพ PNG (High-Res)", data=buf.getvalue(), 
+                               file_name=f"RID_United_Modern_{report_data['date']}.png", mime="image/png", use_container_width=True)
     else:
-        st.info("💡 พี่โบ้วางข้อความรายงานทางซ้ายมือ แล้วกดปุ่มประมวลผลได้เลยครับ")
+        st.info("💡 พี่โบ้วางข้อความรายงานทางซ้ายมือ แล้วกดปุ่มประมวลผลเพื่อดู Dashboard ครับ")
 
 st.divider()
-st.caption("พัฒนาโดยคู่คิด AI | Rid Angthong United 🛡️")
+st.caption("Developed by RID Angthong United AI Partner 🛡️")
