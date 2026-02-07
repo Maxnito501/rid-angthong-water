@@ -11,6 +11,9 @@ STATIONS_CONFIG = {
     'bak': {'label': 'แม่น้ำน้อย (บางจัก)', 'bank': 5.00, 'max': 6.5, 'color': '#E67E22'}
 }
 
+# กำหนดสีพื้นหลังที่นี่เพื่อให้ใช้ได้ทั้งในภาพและบนเว็บ
+BG_COLOR_HEX = '#B3E5FC' 
+
 def get_thai_date():
     months = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
     now = datetime.now()
@@ -51,35 +54,29 @@ def parse_report(manual_text, c7a_auto_data=None):
 
     return data
 
-# --- Custom Drawing Helpers (แทนไอคอนที่ขึ้นเป็นสี่เหลี่ยม) ---
+# --- Custom Drawing Helpers ---
 def draw_rain_icon(draw, x, y, size, color):
-    # วาดก้อนเมฆง่ายๆ
     draw.ellipse([x-size//2, y-size//3, x, y+size//4], fill=color)
     draw.ellipse([x-size//4, y-size//2, x+size//2, y+size//4], fill=color)
-    # วาดหยดฝน
     for i in range(3):
         dx = (i-1) * (size//3)
         draw.line([x+dx, y+size//3, x+dx-5, y+size//2+5], fill=color, width=4)
 
 def draw_check_icon(draw, x, y, size, color):
-    # วาดเครื่องหมายถูก
     draw.line([x-size//3, y, x, y+size//3], fill=color, width=8)
     draw.line([x, y+size//3, x+size//2, y-size//2], fill=color, width=8)
 
 def draw_no_icon(draw, x, y, size, color):
-    # วาดวงกลมขีดฆ่า
     draw.ellipse([x-size//2, y-size//2, x+size//2, y+size//2], outline=color, width=6)
     draw.line([x-size//3, y-size//3, x+size//3, y+size//3], fill=color, width=6)
 
 def draw_location_pin(draw, x, y, size, color):
-    # วาดหมุดสถานี
     draw.ellipse([x-size//4, y-size//2, x+size//4, y], fill=color)
     draw.polygon([x-size//4, y-size//4, x+size//4, y-size//4, x, y+size//4], fill=color)
 
 def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     w, h = 1200, 1550
-    bg_color = '#B3E5FC' # สีฟ้าสดใสขึ้น (Light Blue 200)
-    img = Image.new('RGB', (w, h), color=bg_color)
+    img = Image.new('RGB', (w, h), color=BG_COLOR_HEX)
     draw = ImageDraw.Draw(img)
 
     try:
@@ -93,25 +90,19 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
     except:
         f_title = f_sub = f_label = f_val = f_diff = f_info = f_rain_val = None
 
-    # --- Header (สีน้ำเงินเข้ม) ---
     header_color = "#01579B" 
     draw.rectangle([0, 0, w, 360], fill=header_color)
     draw.text((w/2, 85), "โครงการชลประทานอ่างทอง สำนักงานชลประทานที่ 12", fill="#FFFFFF", font=f_sub, anchor="mm")
     draw.text((w/2, 175), "รายงานสถานการณ์น้ำรายวัน", fill="#FFFFFF", font=f_title, anchor="mm")
     draw.text((w/2, 265), f"ณ วันที่ {data['date']}", fill="#FFEA00", font=f_sub, anchor="mm")
     
-    # --- Rain Section (ฝนสูงสุด) ---
     rain_card_y = 315
     draw.rounded_rectangle([w/2 - 280, rain_card_y, w/2 + 280, rain_card_y + 160], radius=45, fill="#FFFFFF", outline=header_color, width=5)
-    
-    # วาดไอคอนฝนแบบกราฟิกแทน Emoji
     draw_rain_icon(draw, w/2 - 160, rain_card_y + 80, 80, header_color)
-    
     draw.text((w/2 + 60, rain_card_y + 50), "ฝนสูงสุด", fill="#333333", font=f_sub, anchor="mm")
     rain_color = "#D32F2F" if data['has_rain'] else header_color
     draw.text((w/2 + 60, rain_card_y + 110), data['rain_val'], fill=rain_color, font=f_rain_val, anchor="mm")
 
-    # --- Main Stations Section ---
     col_w = w // 3
     card_y = 510
     
@@ -120,16 +111,12 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         st_lvl, st_diff = data[key]
         curr_x = (i * col_w) + (col_w / 2)
         
-        # Shadow Effect
         draw.rounded_rectangle([i*col_w+35, card_y+8, (i+1)*col_w-15, 1208], radius=50, fill="#81D4FA") 
-        # White Card
         draw.rounded_rectangle([i*col_w+25, card_y, (i+1)*col_w-25, 1200], radius=50, fill="#FFFFFF")
         
-        # Station Icon & Label
         draw_location_pin(draw, curr_x - 110, card_y + 65, 40, header_color)
         draw.text((curr_x + 20, card_y + 65), st_info['label'], fill=header_color, font=f_label, anchor="mm")
 
-        # Gauge Design
         t_x1, t_y1, t_x2, t_y2 = curr_x-70, card_y+140, curr_x+70, 950
         draw.rounded_rectangle([t_x1-5, t_y1-5, t_x2+5, t_y2+5], radius=40, fill="#F5F5F5", outline="#BDBDBD", width=3) 
         
@@ -138,35 +125,27 @@ def draw_dashboard(data, font_path="THSarabunNew.ttf"):
         if st_lvl > 0:
             draw.rounded_rectangle([t_x1, max(w_top, t_y1), t_x2, t_y2], radius=35, fill=st_info['color'])
 
-        # Bank Line
         b_y = t_y2 - ((t_y2-t_y1) * (st_info['bank'] / st_info['max']))
         draw.line([t_x1-35, b_y, t_x2+35, b_y], fill="#FF1744", width=10)
         draw.text((curr_x, b_y - 30), f"ระดับตลิ่ง {st_info['bank']:.2f}", fill="#FF1744", font=f_diff, anchor="mm")
 
-        # Bold Values
         draw.text((curr_x, 1020), f"+{st_lvl:.2f} ม.รทก.", fill="#0D47A1", font=f_val, anchor="mm")
-        
         color_diff = "#D32F2F" if st_diff > 0 else ("#1976D2" if st_diff < 0 else "#424242")
         draw.text((curr_x, 1085), f"({st_diff:+.2f} ม.)", fill=color_diff, font=f_diff, anchor="mm")
         
         if key == 'c7a':
             draw.text((curr_x, 1145), f"{data.get('c7a_q', '-')} ลบ.ม./วิ", fill="#1B5E20", font=f_info, anchor="mm")
 
-    # --- Bottom Action Cards ---
     bot_y = 1240
     card_h = 200
-    
-    # Reservoir Card
     draw.rounded_rectangle([50, bot_y, w/2 - 25, bot_y + card_h], radius=50, fill="#FFFFFF", outline="#BDBDBD", width=2)
     draw_no_icon(draw, w/4 - 60, bot_y + 100, 70, "#D32F2F")
     draw.text((w/4 + 60, bot_y + 100), "อ่างเก็บน้ำ", fill="#424242", font=f_label, anchor="mm")
 
-    # Flood Card
     draw.rounded_rectangle([w/2 + 25, bot_y, w - 50, bot_y + card_h], radius=50, fill="#FFFFFF", outline="#BDBDBD", width=2)
     draw_check_icon(draw, 3*w/4 - 90, bot_y + 90, 70, "#2E7D32")
     draw.text((3*w/4 + 50, bot_y + 100), "สถานการณ์อุทกภัย", fill="#2E7D32", font=f_label, anchor="mm")
 
-    # Footer
     draw.text((w/2, h-50), "Rid Angthong United 🛡️", fill="#01579B", font=f_sub, anchor="mm")
     return img
 
@@ -175,7 +154,7 @@ st.set_page_config(page_title="RID Ang Thong UNITED", layout="wide")
 
 st.markdown(f"""
     <style>
-    .main {{ background-color: {bg_color}; }}
+    .main {{ background-color: {BG_COLOR_HEX}; }}
     .stButton>button {{ border-radius: 20px; background-color: #01579B; color: white; border: none; height: 3.5em; font-weight: bold; font-size: 16px; }}
     .stTextArea>div>div>textarea {{ border-radius: 15px; border: 2px solid #01579B; font-size: 16px; }}
     </style>
@@ -190,8 +169,6 @@ with st.sidebar:
     c7a_diff = st.number_input("เทียบเมื่อวาน (+/-)", value=0.02, format="%.2f")
     c7a_q = st.text_input("ปริมาณน้ำไหลผ่าน (ลบ.ม./วิ)", value="130")
     use_auto_c7a = st.checkbox("ใช้ข้อมูล C.7A จากฝั่งนี้", value=True)
-    st.divider()
-    st.info("💡 v1.9: แก้ไขไอคอนหาย และปรับสีพื้นหลังให้สดขึ้น")
 
 col1, col2 = st.columns([1, 1.5])
 
@@ -203,11 +180,10 @@ with col1:
 with col2:
     if process_btn:
         auto_data = {'level': c7a_lvl, 'diff': c7a_diff, 'q': c7a_q} if use_auto_c7a else None
-        with st.spinner('กำลังสร้างงานกราฟิกระดับพรีเมียม...'):
+        with st.spinner('กำลังสร้างงานกราฟิก...'):
             report_data = parse_report(manual_input, auto_data)
             final_img = draw_dashboard(report_data)
-            st.image(final_img, caption="RID Ang Thong UNITED - Vibrant Look v1.9", use_column_width=True)
-            
+            st.image(final_img, caption="RID Ang Thong UNITED v1.9", use_column_width=True)
             buf = io.BytesIO()
             final_img.save(buf, format="PNG")
             st.download_button("💾 ดาวน์โหลดภาพ PNG", data=buf.getvalue(), 
